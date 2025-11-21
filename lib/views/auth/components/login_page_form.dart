@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:uuid/uuid.dart';
 
+import '../../../core/api/services/auth_api_service.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/enums/user_role.dart';
 import '../../../core/models/user_model.dart';
@@ -50,38 +50,65 @@ class _LoginPageFormState extends State<LoginPageForm> {
     });
 
     try {
-      final phoneNumber = _phoneController.text.trim();
+      final emailOrPhone = _phoneController.text.trim();
       final password = _passwordController.text;
 
-      // Try Firebase authentication first
-      final authService = AuthService();
       UserModel? user;
 
-      if (authService.isFirebaseInitialized) {
-        // Try email/password login (assuming phone can be email)
-        // In real app, you'd need proper phone auth
-        user = await authService.signInWithEmailPassword(
-          phoneNumber.contains('@') ? phoneNumber : '$phoneNumber@demo.com',
-          password,
-        );
-      }
-
-      // If Firebase login failed or Firebase not initialized, use local auth
-      if (user == null) {
-        // Save login state locally for demo
-        await LocalAuthService.saveLoginState(
-          userId: const Uuid().v4(),
-          name: 'Demo User',
-          email: '$phoneNumber@demo.com',
-          phoneNumber: phoneNumber,
-          role: UserRole.customer,
+      // Try API login first (backend authentication)
+      try {
+        final apiResponse = await AuthApiService.login(
+          emailOrPhone: emailOrPhone,
+          password: password,
         );
 
-        user = await authService.getCurrentUser();
+        if (apiResponse.success && apiResponse.data != null) {
+          // Save user data from API response (includes correct role)
+          user = apiResponse.data!.user;
+          
+          // Save to local storage for offline access
+          await LocalAuthService.saveLoginState(
+            userId: user.id,
+            name: user.name,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            role: user.role, // Use the actual role from backend
+          );
+
+          // TODO: Store access token securely (use secure storage)
+          // For now, we'll rely on local auth for session management
+        }
+      } catch (apiError) {
+        // API login failed, try Firebase as fallback
+        final authService = AuthService();
+        if (authService.isFirebaseInitialized) {
+          try {
+            user = await authService.signInWithEmailPassword(
+              emailOrPhone.contains('@') ? emailOrPhone : '$emailOrPhone@demo.com',
+              password,
+            );
+          } catch (firebaseError) {
+            // Firebase also failed
+          }
+        }
+
+        // If both API and Firebase failed, use local auth as last resort (demo mode)
+        if (user == null) {
+          // This is a fallback for demo/testing - in production, this shouldn't happen
+          await LocalAuthService.saveLoginState(
+            userId: 'demo_${DateTime.now().millisecondsSinceEpoch}',
+            name: 'Demo User',
+            email: emailOrPhone.contains('@') ? emailOrPhone : '$emailOrPhone@demo.com',
+            phoneNumber: emailOrPhone.contains('@') ? '' : emailOrPhone,
+            role: UserRole.customer, // Default to customer in demo mode
+          );
+          user = await authService.getCurrentUser();
+        }
       }
 
       if (mounted) {
         if (user != null) {
+          // Navigate to entry point which will route based on user role
           Navigator.pushReplacementNamed(context, AppRoutes.entryPoint);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(

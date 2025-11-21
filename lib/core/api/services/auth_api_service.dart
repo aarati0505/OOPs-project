@@ -61,12 +61,24 @@ class AuthApiService {
   static Future<ApiResponse<LoginResponse>> verifyOtp({
     required String phoneNumber,
     required String otp,
+    String? role,
+    String? name,
+    String? email,
+    String? password,
+    String? businessName,
+    String? businessAddress,
   }) async {
     final response = await ApiClient.post(
       AppConstants.verifyOtpEndpoint,
       body: {
         'phoneNumber': phoneNumber,
         'otp': otp,
+        if (role != null) 'role': role,
+        if (name != null) 'name': name,
+        if (email != null) 'email': email,
+        if (password != null) 'password': password,
+        if (businessName != null) 'businessName': businessName,
+        if (businessAddress != null) 'businessAddress': businessAddress,
       },
     );
 

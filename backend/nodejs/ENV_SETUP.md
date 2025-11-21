@@ -21,7 +21,7 @@ NODE_ENV=development
 
 # Database Configuration
 # Local MongoDB example:
-MONGODB_URI=mongodb://127.0.0.1:27017/oops_project_dev
+MONGODB_URI=mongodb://localhost:27017/
 # MongoDB Atlas example:
 # MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname
 

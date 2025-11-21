@@ -75,7 +75,7 @@ exports.getInventory = async (req, res) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stockQuantity,
+      stock: product.stock,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
@@ -112,13 +112,13 @@ exports.addProduct = async (req, res, next) => {
     // Validate product payload
     validateProductPayload(req.body, false);
 
-    const { name, description, price, stock, stockQuantity, categoryId, images, weight, region, isLocal } = req.body;
+    const { name, description, price, stock, categoryId, images, weight, region, isLocal } = req.body;
 
     const productData = {
       name,
       description,
       price: parseFloat(price),
-      stockQuantity: stock !== undefined ? parseInt(stock) : parseInt(stockQuantity),
+      stock: parseInt(stock),
       categoryId,
       images: images || [],
       weight,
@@ -128,7 +128,7 @@ exports.addProduct = async (req, res, next) => {
     };
 
     // Ensure stock is non-negative
-    if (productData.stockQuantity < 0) {
+    if (productData.stock < 0) {
       throw new ValidationError('Stock cannot be negative', 'stock');
     }
 
@@ -157,7 +157,7 @@ exports.addProduct = async (req, res, next) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stockQuantity,
+      stock: product.stock,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
@@ -230,7 +230,7 @@ exports.updateProduct = async (req, res) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stockQuantity,
+      stock: product.stock,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
@@ -328,18 +328,18 @@ exports.updateStock = async (req, res, next) => {
     // Update stock based on operation - ensure never negative
     const qty = parseInt(quantity);
     if (operation === 'add') {
-      product.stockQuantity = Math.max(0, (product.stockQuantity || 0) + qty);
+      product.stock = Math.max(0, (product.stock || 0) + qty);
     } else if (operation === 'subtract') {
-      product.stockQuantity = Math.max(0, (product.stockQuantity || 0) - qty);
+      product.stock = Math.max(0, (product.stock || 0) - qty);
     } else if (operation === 'set') {
       if (qty < 0) {
         throw new ValidationError('Stock cannot be negative', 'quantity');
       }
-      product.stockQuantity = qty;
+      product.stock = qty;
     }
 
     // Mark as inactive if stock is 0
-    if (product.stockQuantity === 0) {
+    if (product.stock === 0) {
       product.isActive = false;
     } else {
       product.isActive = true;
@@ -352,7 +352,7 @@ exports.updateStock = async (req, res, next) => {
       id: product._id.toString(),
       name: product.name,
       price: product.price,
-      stock: product.stockQuantity,
+      stock: product.stock,
       inStock: product.stock > 0,
       updatedAt: product.updatedAt.toISOString(),
     };
@@ -390,12 +390,12 @@ exports.getInventoryStats = async (req, res) => {
 
     const [totalProducts, inStock, outOfStock, lowStock, totalValue] = await Promise.all([
       Product.countDocuments(query),
-      Product.countDocuments({ ...query, stockQuantity: { $gt: 0 } }),
-      Product.countDocuments({ ...query, stockQuantity: { $lte: 0 } }),
-      Product.countDocuments({ ...query, stockQuantity: { $gt: 0, $lte: 10 } }), // Low stock threshold
+      Product.countDocuments({ ...query, stock: { $gt: 0 } }),
+      Product.countDocuments({ ...query, stock: { $lte: 0 } }),
+      Product.countDocuments({ ...query, stock: { $gt: 0, $lte: 10 } }), // Low stock threshold
       Product.aggregate([
         { $match: query },
-        { $group: { _id: null, total: { $sum: { $multiply: ['$price', '$stockQuantity'] } } } },
+        { $group: { _id: null, total: { $sum: { $multiply: ['$price', '$stock'] } } } },
       ]),
     ]);
 
@@ -487,8 +487,8 @@ exports.importProductFromWholesaler = async (req, res, next) => {
       categoryId: proxyProduct.categoryId?._id.toString(),
       imageUrl: proxyProduct.images?.[0] || null,
       images: proxyProduct.images || [],
-      inStock: proxyProduct.stockQuantity > 0,
-      stock: proxyProduct.stockQuantity,
+      inStock: proxyProduct.stock > 0,
+      stock: proxyProduct.stock,
       weight: proxyProduct.weight,
       region: proxyProduct.region,
       isLocal: proxyProduct.isLocal,

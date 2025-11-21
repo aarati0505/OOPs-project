@@ -155,67 +155,83 @@ exports.signup = async (req, res, next) => {
  * Verify OTP for phone number
  * Matching: AuthApiService.verifyOtp()
  */
-exports.verifyOtp = async (req, res) => {
+exports.verifyOtp = async (req, res, next) => {
   try {
-    const { phoneNumber, otp, role = 'customer', name, email } = req.body;
+    const { 
+      phoneNumber, 
+      otp, 
+      role = 'customer', 
+      name, 
+      email,
+      password,
+      businessName,
+      businessAddress,
+    } = req.body;
 
     if (!phoneNumber || !otp) {
-      return res.status(400).json(errorResponse(
-        [createApiError('auth', 'Phone number and OTP are required')],
-        'Validation error',
-      ));
+      throw new ValidationError('Phone number and OTP are required');
     }
 
     const otpToken = await OtpToken.findOne({ phoneNumber }).sort({ createdAt: -1 });
     if (!otpToken) {
-      return res.status(400).json(errorResponse(
-        [createApiError('auth', 'OTP not requested or expired')],
-        'OTP verification failed',
-      ));
+      throw new ValidationError('OTP not requested or expired');
     }
 
     if (otpToken.expiresAt < new Date()) {
       await OtpToken.deleteMany({ phoneNumber });
-      return res.status(400).json(errorResponse(
-        [createApiError('auth', 'OTP expired')],
-        'OTP verification failed',
-      ));
+      throw new ValidationError('OTP expired');
     }
 
     const isValidOtp = await verifyOtpCode(otp, otpToken.otpHash);
     if (!isValidOtp) {
-      return res.status(400).json(errorResponse(
-        [createApiError('auth', 'Invalid OTP')],
-        'OTP verification failed',
-      ));
+      throw new ValidationError('Invalid OTP');
     }
 
     await OtpToken.deleteMany({ phoneNumber });
 
+    // Check if user already exists
     let user = await User.findOne({ phone: phoneNumber });
+    
     if (!user) {
+      // Create new user with signup data
+      if (!name || !email || !password) {
+        throw new ValidationError('Name, email, and password are required for signup');
+      }
+
       const assignedRole = ALLOWED_ROLES.includes(role) ? role : 'customer';
-      const placeholderPassword = await hashPassword(`otp-${Date.now()}`);
+      const passwordHash = await hashPassword(password);
+      
       user = new User({
-        name: name || 'New User',
-        email: email || `${phoneNumber}@otp-login.local`,
+        name,
+        email: email.toLowerCase(),
         phone: phoneNumber,
-        passwordHash: placeholderPassword,
+        passwordHash,
         role: assignedRole,
+        businessName,
+        businessAddress,
         isPhoneVerified: true,
-        isEmailVerified: !!email,
+        isEmailVerified: false, // Will be verified when they verify email
       });
       await user.save();
     } else {
+      // User exists, just mark phone as verified
       user.isPhoneVerified = true;
+      // Update role if provided and different
+      if (role && ALLOWED_ROLES.includes(role) && user.role !== role) {
+        user.role = role;
+      }
+      // Update other fields if provided
+      if (name) user.name = name;
+      if (email) user.email = email.toLowerCase();
+      if (businessName) user.businessName = businessName;
+      if (businessAddress) user.businessAddress = businessAddress;
       await user.save();
     }
 
     const tokens = await issueAuthTokens(user);
     res.json(successResponse(tokens, 'OTP verified successfully'));
   } catch (error) {
-    console.error('OTP verification error:', error);
-    res.status(500).json(errorResponse(createApiError('auth', error.message), 'OTP verification failed'));
+    next(error);
   }
 };
 
