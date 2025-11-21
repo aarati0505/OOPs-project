@@ -23,6 +23,10 @@ class ProductModel {
   String? wholesalerName;
   bool isViaWholesaler; // If retailer shows item available via wholesaler
   
+  // Proxy inventory fields (NEW)
+  String? sourceType; // "retailer" or "wholesaler" - for proxy products
+  String? sourceProductId; // Reference to original wholesaler product if imported
+  
   // Location for shop suggestions
   Map<String, dynamic>? shopLocation; // {latitude: double, longitude: double, address: String}
   double? distanceFromUser; // Distance in km
@@ -51,6 +55,8 @@ class ProductModel {
     this.wholesalerId,
     this.wholesalerName,
     this.isViaWholesaler = false,
+    this.sourceType,
+    this.sourceProductId,
     this.shopLocation,
     this.distanceFromUser,
     required this.createdAt,
@@ -79,6 +85,8 @@ class ProductModel {
       'wholesalerId': wholesalerId,
       'wholesalerName': wholesalerName,
       'isViaWholesaler': isViaWholesaler,
+      'sourceType': sourceType,
+      'sourceProductId': sourceProductId,
       'shopLocation': shopLocation,
       'distanceFromUser': distanceFromUser,
       'createdAt': createdAt.toIso8601String(),
@@ -110,10 +118,16 @@ class ProductModel {
       wholesalerId: json['wholesalerId'],
       wholesalerName: json['wholesalerName'],
       isViaWholesaler: json['isViaWholesaler'] ?? false,
+      sourceType: json['sourceType'],
+      sourceProductId: json['sourceProductId'],
       shopLocation: json['shopLocation'],
       distanceFromUser: json['distanceFromUser']?.toDouble(),
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
     );
   }
+  
+  // Convenience getters for compatibility
+  int get stock => stockQuantity;
+  String? get imageUrl => images.isNotEmpty ? images[0] : cover;
 }

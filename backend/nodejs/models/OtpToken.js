@@ -18,12 +18,12 @@ const otpTokenSchema = new mongoose.Schema({
   expiresAt: {
     type: Date,
     required: true,
-    index: true,
   },
 }, {
   timestamps: true,
 });
 
+// TTL index for automatic expiration (removes duplicate index warning)
 otpTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const OtpToken = mongoose.model('OtpToken', otpTokenSchema);

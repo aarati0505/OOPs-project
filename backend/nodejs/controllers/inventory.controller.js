@@ -1,6 +1,8 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
-const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
+const { successResponse } = require('../utils/response.util');
+const { validateProductPayload, validateStockUpdatePayload, validateImportWholesalerPayload } = require('../utils/validation.util');
+const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/error.util');
 const { parsePagination, calculatePagination } = require('../utils/pagination.util');
 
 /**
@@ -73,11 +75,13 @@ exports.getInventory = async (req, res) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stock,
+      stock: product.stockQuantity,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
       isActive: product.isActive,
+      sourceType: product.sourceType,
+      sourceProductId: product.sourceProductId?.toString(),
       createdAt: product.createdAt.toISOString(),
     }));
 
@@ -98,34 +102,23 @@ exports.getInventory = async (req, res) => {
  * Add product to inventory
  * Matching: InventoryApiService.addProduct()
  */
-exports.addProduct = async (req, res) => {
+exports.addProduct = async (req, res, next) => {
   try {
     const user = req.user;
     if (!['retailer', 'wholesaler'].includes(user.role)) {
-      return res.status(403).json(
-        errorResponse(
-          [createApiError('inventory', 'Access denied')],
-          'Only retailers and wholesalers can add products'
-        )
-      );
+      throw new ForbiddenError('Only retailers and wholesalers can add products');
     }
 
-    const { name, description, price, stock, categoryId, images, weight, region, isLocal } = req.body;
+    // Validate product payload
+    validateProductPayload(req.body, false);
 
-    if (!name || !price || stock === undefined || !categoryId) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('inventory', 'Name, price, stock, and categoryId are required')],
-          'Validation error'
-        )
-      );
-    }
+    const { name, description, price, stock, stockQuantity, categoryId, images, weight, region, isLocal } = req.body;
 
     const productData = {
       name,
       description,
       price: parseFloat(price),
-      stock: parseInt(stock),
+      stockQuantity: stock !== undefined ? parseInt(stock) : parseInt(stockQuantity),
       categoryId,
       images: images || [],
       weight,
@@ -133,6 +126,11 @@ exports.addProduct = async (req, res) => {
       isLocal: isLocal !== undefined ? isLocal : true,
       isActive: true,
     };
+
+    // Ensure stock is non-negative
+    if (productData.stockQuantity < 0) {
+      throw new ValidationError('Stock cannot be negative', 'stock');
+    }
 
     // Set retailerId or wholesalerId based on role
     if (user.role === 'retailer') {
@@ -159,17 +157,18 @@ exports.addProduct = async (req, res) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stock,
+      stock: product.stockQuantity,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
+      sourceType: product.sourceType,
+      sourceProductId: product.sourceProductId?.toString(),
       createdAt: product.createdAt.toISOString(),
     };
 
     res.json(successResponse(productResponse, 'Product added to inventory'));
   } catch (error) {
-    console.error('Add product error:', error);
-    res.status(500).json(errorResponse(createApiError('inventory', error.message), 'Failed to add product'));
+    next(error);
   }
 };
 
@@ -231,10 +230,12 @@ exports.updateProduct = async (req, res) => {
       imageUrl: product.images?.[0] || null,
       images: product.images || [],
       inStock: product.stock > 0,
-      stock: product.stock,
+      stock: product.stockQuantity,
       weight: product.weight,
       region: product.region,
       isLocal: product.isLocal,
+      sourceType: product.sourceType,
+      sourceProductId: product.sourceProductId?.toString(),
       updatedAt: product.updatedAt.toISOString(),
     };
 
@@ -299,29 +300,18 @@ exports.deleteProduct = async (req, res) => {
  * Update stock quantity
  * Matching: InventoryApiService.updateStock()
  */
-exports.updateStock = async (req, res) => {
+exports.updateStock = async (req, res, next) => {
   try {
     const user = req.user;
+    if (!['retailer', 'wholesaler'].includes(user.role)) {
+      throw new ForbiddenError('Only retailers and wholesalers can update stock');
+    }
+
+    // Validate stock update payload
+    validateStockUpdatePayload(req.body);
+
     const { productId } = req.params;
     const { quantity, operation } = req.body;
-
-    if (!['retailer', 'wholesaler'].includes(user.role)) {
-      return res.status(403).json(
-        errorResponse(
-          [createApiError('inventory', 'Access denied')],
-          'Only retailers and wholesalers can update stock'
-        )
-      );
-    }
-
-    if (!quantity || !operation || !['add', 'subtract', 'set'].includes(operation)) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('inventory', 'Quantity and operation (add/subtract/set) are required')],
-          'Validation error'
-        )
-      );
-    }
 
     const query = { _id: productId };
     if (user.role === 'retailer') {
@@ -332,22 +322,27 @@ exports.updateStock = async (req, res) => {
 
     const product = await Product.findOne(query);
     if (!product) {
-      return res.status(404).json(
-        errorResponse(
-          [createApiError('inventory', 'Product not found')],
-          'Product not found'
-        )
-      );
+      throw new NotFoundError('Product not found');
     }
 
-    // Update stock based on operation
+    // Update stock based on operation - ensure never negative
     const qty = parseInt(quantity);
     if (operation === 'add') {
-      product.stock += qty;
+      product.stockQuantity = Math.max(0, (product.stockQuantity || 0) + qty);
     } else if (operation === 'subtract') {
-      product.stock = Math.max(0, product.stock - qty);
+      product.stockQuantity = Math.max(0, (product.stockQuantity || 0) - qty);
     } else if (operation === 'set') {
-      product.stock = qty;
+      if (qty < 0) {
+        throw new ValidationError('Stock cannot be negative', 'quantity');
+      }
+      product.stockQuantity = qty;
+    }
+
+    // Mark as inactive if stock is 0
+    if (product.stockQuantity === 0) {
+      product.isActive = false;
+    } else {
+      product.isActive = true;
     }
 
     await product.save();
@@ -357,7 +352,7 @@ exports.updateStock = async (req, res) => {
       id: product._id.toString(),
       name: product.name,
       price: product.price,
-      stock: product.stock,
+      stock: product.stockQuantity,
       inStock: product.stock > 0,
       updatedAt: product.updatedAt.toISOString(),
     };
@@ -395,12 +390,12 @@ exports.getInventoryStats = async (req, res) => {
 
     const [totalProducts, inStock, outOfStock, lowStock, totalValue] = await Promise.all([
       Product.countDocuments(query),
-      Product.countDocuments({ ...query, stock: { $gt: 0 } }),
-      Product.countDocuments({ ...query, stock: { $lte: 0 } }),
-      Product.countDocuments({ ...query, stock: { $gt: 0, $lte: 10 } }), // Low stock threshold
+      Product.countDocuments({ ...query, stockQuantity: { $gt: 0 } }),
+      Product.countDocuments({ ...query, stockQuantity: { $lte: 0 } }),
+      Product.countDocuments({ ...query, stockQuantity: { $gt: 0, $lte: 10 } }), // Low stock threshold
       Product.aggregate([
         { $match: query },
-        { $group: { _id: null, total: { $sum: { $multiply: ['$price', '$stock'] } } } },
+        { $group: { _id: null, total: { $sum: { $multiply: ['$price', '$stockQuantity'] } } } },
       ]),
     ]);
 
@@ -416,5 +411,94 @@ exports.getInventoryStats = async (req, res) => {
   } catch (error) {
     console.error('Get inventory stats error:', error);
     res.status(500).json(errorResponse(createApiError('inventory', error.message), 'Failed to get inventory stats'));
+  }
+};
+
+/**
+ * POST /inventory/import-from-wholesaler
+ * Import product from wholesaler (Proxy Inventory)
+ * Matching: InventoryApiService.importProductFromWholesaler()
+ */
+exports.importProductFromWholesaler = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'retailer') {
+      throw new ForbiddenError('Only retailers can import products from wholesalers');
+    }
+
+    // Validate import payload
+    validateImportWholesalerPayload(req.body);
+
+    const { productId, stock, price } = req.body;
+
+    // Find the wholesaler product
+    const wholesalerProduct = await Product.findOne({ 
+      _id: productId, 
+      wholesalerId: { $exists: true },
+      isActive: true 
+    }).populate('categoryId', 'name slug');
+
+    if (!wholesalerProduct) {
+      throw new NotFoundError('Wholesaler product not found');
+    }
+
+    // Check if retailer already imported this product
+    const existingProxyProduct = await Product.findOne({
+      retailerId: user._id,
+      sourceProductId: wholesalerProduct._id,
+    });
+
+    if (existingProxyProduct) {
+      throw new ValidationError('You have already imported this product', 'productId');
+    }
+
+    // Create proxy product for retailer
+    const proxyProductData = {
+      name: wholesalerProduct.name,
+      description: wholesalerProduct.description,
+      price: price !== undefined ? parseFloat(price) : wholesalerProduct.price, // Retailer can override
+      stock: stock !== undefined ? parseInt(stock) : 0, // Retailer can set initial stock
+      categoryId: wholesalerProduct.categoryId._id,
+      images: wholesalerProduct.images,
+      weight: wholesalerProduct.weight,
+      region: wholesalerProduct.region || user.location?.region,
+      isLocal: wholesalerProduct.isLocal,
+      isActive: true,
+      retailerId: user._id,
+      wholesalerId: wholesalerProduct.wholesalerId, // Keep reference to original wholesaler
+      sourceType: 'wholesaler',
+      sourceProductId: wholesalerProduct._id,
+    };
+
+    const proxyProduct = new Product(proxyProductData);
+    await proxyProduct.save();
+
+    // Update category product count
+    await Category.findByIdAndUpdate(wholesalerProduct.categoryId._id, { $inc: { productCount: 1 } });
+
+    await proxyProduct.populate('categoryId', 'name slug');
+
+    const productResponse = {
+      id: proxyProduct._id.toString(),
+      name: proxyProduct.name,
+      description: proxyProduct.description,
+      price: proxyProduct.price,
+      category: proxyProduct.categoryId?.name || '',
+      categoryId: proxyProduct.categoryId?._id.toString(),
+      imageUrl: proxyProduct.images?.[0] || null,
+      images: proxyProduct.images || [],
+      inStock: proxyProduct.stockQuantity > 0,
+      stock: proxyProduct.stockQuantity,
+      weight: proxyProduct.weight,
+      region: proxyProduct.region,
+      isLocal: proxyProduct.isLocal,
+      sourceType: proxyProduct.sourceType,
+      sourceProductId: proxyProduct.sourceProductId?.toString(),
+      createdAt: proxyProduct.createdAt.toISOString(),
+    };
+
+    res.json(successResponse(productResponse, 'Product imported from wholesaler successfully'));
+  } catch (error) {
+    next(error);
   }
 };

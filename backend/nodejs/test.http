@@ -1,0 +1,372 @@
+### Backend API Test Requests
+### Use with VS Code REST Client extension or Cursor REST Client
+### Base URL: http://localhost:3000/v1
+
+@baseUrl = http://localhost:3000/v1
+@accessToken = your_access_token_here
+@refreshToken = your_refresh_token_here
+
+### ============================================
+### AUTH
+### ============================================
+
+### Health Check (No auth required)
+GET {{baseUrl}}/../health
+
+### Customer Signup
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "name": "Test Customer",
+  "email": "customer@test.com",
+  "phoneNumber": "+1234567890",
+  "password": "password123",
+  "role": "customer"
+}
+
+### Retailer Signup
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "name": "Test Retailer",
+  "email": "retailer@test.com",
+  "phoneNumber": "+1234567891",
+  "password": "password123",
+  "role": "retailer",
+  "businessName": "Test Retail Store",
+  "businessAddress": "123 Main St, City, State"
+}
+
+### Wholesaler Signup
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "name": "Test Wholesaler",
+  "email": "wholesaler@test.com",
+  "phoneNumber": "+1234567892",
+  "password": "password123",
+  "role": "wholesaler",
+  "businessName": "Test Wholesale Co.",
+  "businessAddress": "456 Business Ave, City, State"
+}
+
+### Login (Customer)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "customer@test.com",
+  "password": "password123"
+}
+
+### Login (Retailer)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "retailer@test.com",
+  "password": "password123"
+}
+
+### Login (Wholesaler)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "wholesaler@test.com",
+  "password": "password123"
+}
+
+### Refresh Token
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### ============================================
+### PRODUCTS
+### ============================================
+
+### Get All Products
+GET {{baseUrl}}/products
+Authorization: Bearer {{accessToken}}
+
+### Get Products with Filters
+GET {{baseUrl}}/products?region=HYD&minPrice=10&maxPrice=500
+Authorization: Bearer {{accessToken}}
+
+### Get Product by ID
+GET {{baseUrl}}/products/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+
+### Search Products
+GET {{baseUrl}}/products/search?q=laptop
+Authorization: Bearer {{accessToken}}
+
+### Get Products by Category
+GET {{baseUrl}}/products/category/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+
+### Get Popular Products
+GET {{baseUrl}}/products/popular
+Authorization: Bearer {{accessToken}}
+
+### Get New Products
+GET {{baseUrl}}/products/new
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### CART
+### ============================================
+
+### Get Cart
+GET {{baseUrl}}/cart
+Authorization: Bearer {{accessToken}}
+
+### Add Item to Cart
+POST {{baseUrl}}/cart/items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "507f1f77bcf86cd799439011",
+  "quantity": 2
+}
+
+### Update Cart Item
+PUT {{baseUrl}}/cart/items/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "quantity": 3
+}
+
+### Remove Item from Cart
+DELETE {{baseUrl}}/cart/items/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+
+### Clear Cart
+POST {{baseUrl}}/cart/clear
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### ORDERS
+### ============================================
+
+### Create Order (from cart)
+POST {{baseUrl}}/orders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "deliveryAddressId": "507f1f77bcf86cd799439012",
+  "paymentMethod": "card"
+}
+
+### Create Order (with items)
+POST {{baseUrl}}/orders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": "507f1f77bcf86cd799439011",
+      "quantity": 2
+    }
+  ],
+  "deliveryAddressId": "507f1f77bcf86cd799439012",
+  "paymentMethod": "cash_on_delivery"
+}
+
+### Get Customer Orders
+GET {{baseUrl}}/orders
+Authorization: Bearer {{accessToken}}
+
+### Get Orders by Status
+GET {{baseUrl}}/orders?status=pending
+Authorization: Bearer {{accessToken}}
+
+### Get Order by ID
+GET {{baseUrl}}/orders/507f1f77bcf86cd799439013
+Authorization: Bearer {{accessToken}}
+
+### Track Order
+GET {{baseUrl}}/orders/507f1f77bcf86cd799439013/tracking
+Authorization: Bearer {{accessToken}}
+
+### Update Order Status
+PATCH {{baseUrl}}/orders/507f1f77bcf86cd799439013
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "confirmed"
+}
+
+### ============================================
+### WHOLESALE ORDERS (Retailer)
+### ============================================
+
+### Create Wholesale Order
+POST {{baseUrl}}/orders/wholesale
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "productId": "507f1f77bcf86cd799439020",
+      "quantity": 50
+    }
+  ],
+  "paymentMethod": "cash_on_delivery"
+}
+
+### Get Retailer Wholesale Orders
+GET {{baseUrl}}/orders/wholesale/retailer
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### WHOLESALE ORDERS (Wholesaler)
+### ============================================
+
+### Get Wholesaler Orders from Retailers
+GET {{baseUrl}}/orders/wholesale/wholesaler
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### INVENTORY (Retailer/Wholesaler)
+### ============================================
+
+### Get Inventory
+GET {{baseUrl}}/inventory
+Authorization: Bearer {{accessToken}}
+
+### Get Inventory with Filters
+GET {{baseUrl}}/inventory?sourceType=wholesaler&page=1&pageSize=20
+Authorization: Bearer {{accessToken}}
+
+### Add Product
+POST {{baseUrl}}/inventory/products
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "New Product",
+  "description": "Product description",
+  "price": 99.99,
+  "stock": 100,
+  "categoryId": "507f1f77bcf86cd799439011",
+  "images": ["https://example.com/image.jpg"],
+  "weight": 0.5,
+  "region": "HYD",
+  "isLocal": true
+}
+
+### Update Product
+PUT {{baseUrl}}/inventory/products/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Updated Product Name",
+  "price": 89.99
+}
+
+### Update Stock
+PATCH {{baseUrl}}/inventory/stock/507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "quantity": 50,
+  "operation": "add"
+}
+
+### Import Product from Wholesaler
+POST {{baseUrl}}/inventory/import-from-wholesaler
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "507f1f77bcf86cd799439020",
+  "stock": 50,
+  "price": 45.99
+}
+
+### ============================================
+### DASHBOARDS
+### ============================================
+
+### Get Customer Dashboard
+GET {{baseUrl}}/users/dashboard
+Authorization: Bearer {{accessToken}}
+
+### Get Retailer Dashboard
+GET {{baseUrl}}/users/dashboard
+Authorization: Bearer {{accessToken}}
+
+### Get Wholesaler Dashboard
+GET {{baseUrl}}/users/dashboard
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### REVIEWS
+### ============================================
+
+### Add Review
+POST {{baseUrl}}/reviews
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "productId": "507f1f77bcf86cd799439011",
+  "rating": 5,
+  "comment": "Great product! Highly recommended."
+}
+
+### Get Reviews for Product
+GET {{baseUrl}}/reviews?productId=507f1f77bcf86cd799439011
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### CATEGORIES
+### ============================================
+
+### Get Categories
+GET {{baseUrl}}/categories
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### NOTIFICATIONS
+### ============================================
+
+### Get Notifications
+GET {{baseUrl}}/notifications
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### USER PROFILE
+### ============================================
+
+### Get Profile
+GET {{baseUrl}}/users/profile
+Authorization: Bearer {{accessToken}}
+
+### Update Profile
+PUT {{baseUrl}}/users/profile
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "phoneNumber": "+1234567890"
+}
+

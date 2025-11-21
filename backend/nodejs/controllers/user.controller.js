@@ -336,3 +336,296 @@ exports.deleteAddress = async (req, res) => {
     res.status(500).json(errorResponse(createApiError('user', error.message), 'Failed to delete address'));
   }
 };
+
+/**
+ * GET /users/dashboard
+ * Get user dashboard with role-specific analytics
+ * Matching: UserApiService.getDashboard()
+ */
+exports.getDashboard = async (req, res) => {
+  try {
+    const user = req.user;
+    const Order = require('../models/Order');
+    const Product = require('../models/Product');
+    const Notification = require('../models/Notification');
+
+    let dashboardData = {};
+
+    if (user.role === 'customer') {
+      // Customer Dashboard
+      const [recentOrders, notifications, localProducts, orderStats] = await Promise.all([
+        Order.find({ userId: user._id })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .populate('items.productId', 'name images')
+          .lean(),
+        Notification.find({ userId: user._id, isRead: false })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean(),
+        Product.find({ 
+          isActive: true, 
+          isLocal: true, 
+          region: user.location?.region,
+          stock: { $gt: 0 }
+        })
+          .sort({ rating: -1, reviewCount: -1 })
+          .limit(10)
+          .populate('categoryId', 'name')
+          .lean(),
+        Order.aggregate([
+          { $match: { userId: user._id } },
+          { $group: { 
+            _id: null, 
+            totalOrders: { $sum: 1 },
+            totalSpent: { $sum: '$finalAmount' },
+            pendingOrders: { 
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } 
+            },
+            deliveredOrders: { 
+              $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } 
+            }
+          }}
+        ])
+      ]);
+
+      dashboardData = {
+        role: 'customer',
+        stats: {
+          totalOrders: orderStats[0]?.totalOrders || 0,
+          totalSpent: orderStats[0]?.totalSpent || 0,
+          pendingOrders: orderStats[0]?.pendingOrders || 0,
+          deliveredOrders: orderStats[0]?.deliveredOrders || 0,
+        },
+        recentOrders: recentOrders.map(order => ({
+          id: order._id.toString(),
+          totalAmount: order.finalAmount,
+          status: order.status,
+          itemCount: order.items.length,
+          createdAt: order.createdAt.toISOString(),
+        })),
+        recommendedProducts: localProducts.map(product => ({
+          id: product._id.toString(),
+          name: product.name,
+          price: product.price,
+          category: product.categoryId?.name || '',
+          imageUrl: product.images?.[0] || null,
+          rating: product.rating || 0,
+          inStock: product.stock > 0,
+        })),
+        notifications: notifications.map(notif => ({
+          id: notif._id.toString(),
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          createdAt: notif.createdAt.toISOString(),
+        })),
+      };
+
+    } else if (user.role === 'retailer') {
+      // Retailer Dashboard
+      const [
+        totalProducts, 
+        lowStockProducts, 
+        recentCustomerOrders, 
+        wholesaleOrders,
+        revenueStats,
+        notifications
+      ] = await Promise.all([
+        Product.countDocuments({ retailerId: user._id, isActive: true }),
+        Product.find({ 
+          retailerId: user._id, 
+          isActive: true, 
+          stock: { $gt: 0, $lte: 10 } 
+        })
+          .select('name stock price')
+          .sort({ stock: 1 })
+          .limit(10)
+          .lean(),
+        Order.find({ retailerId: user._id })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .populate('userId', 'name email')
+          .lean(),
+        Order.find({ 
+          userId: user._id, 
+          wholesalerId: { $exists: true, $ne: null } 
+        })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .populate('wholesalerId', 'name businessName')
+          .lean(),
+        Order.aggregate([
+          { $match: { retailerId: user._id } },
+          { $group: {
+            _id: null,
+            totalRevenue: { $sum: '$finalAmount' },
+            totalOrders: { $sum: 1 },
+            pendingOrders: { 
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } 
+            },
+            completedOrders: { 
+              $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } 
+            }
+          }}
+        ]),
+        Notification.find({ userId: user._id, isRead: false })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean()
+      ]);
+
+      const productStats = await Product.aggregate([
+        { $match: { retailerId: user._id, isActive: true } },
+        { $group: {
+          _id: null,
+          totalProducts: { $sum: 1 },
+          inStock: { $sum: { $cond: [{ $gt: ['$stock', 0] }, 1, 0] } },
+          outOfStock: { $sum: { $cond: [{ $lte: ['$stock', 0] }, 1, 0] } },
+          totalInventoryValue: { $sum: { $multiply: ['$price', '$stock'] } }
+        }}
+      ]);
+
+      dashboardData = {
+        role: 'retailer',
+        stats: {
+          totalProducts: productStats[0]?.totalProducts || 0,
+          inStock: productStats[0]?.inStock || 0,
+          outOfStock: productStats[0]?.outOfStock || 0,
+          totalInventoryValue: productStats[0]?.totalInventoryValue || 0,
+          totalRevenue: revenueStats[0]?.totalRevenue || 0,
+          totalOrders: revenueStats[0]?.totalOrders || 0,
+          pendingOrders: revenueStats[0]?.pendingOrders || 0,
+          completedOrders: revenueStats[0]?.completedOrders || 0,
+        },
+        lowStockProducts: lowStockProducts.map(product => ({
+          id: product._id.toString(),
+          name: product.name,
+          stock: product.stock,
+          price: product.price,
+        })),
+        recentCustomerOrders: recentCustomerOrders.map(order => ({
+          id: order._id.toString(),
+          customerName: order.userId?.name || 'Unknown',
+          totalAmount: order.finalAmount,
+          status: order.status,
+          createdAt: order.createdAt.toISOString(),
+        })),
+        wholesaleOrders: wholesaleOrders.map(order => ({
+          id: order._id.toString(),
+          wholesalerName: order.wholesalerId?.businessName || order.wholesalerId?.name || 'Unknown',
+          totalAmount: order.finalAmount,
+          status: order.status,
+          createdAt: order.createdAt.toISOString(),
+        })),
+        notifications: notifications.map(notif => ({
+          id: notif._id.toString(),
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          createdAt: notif.createdAt.toISOString(),
+        })),
+      };
+
+    } else if (user.role === 'wholesaler') {
+      // Wholesaler Dashboard
+      const [
+        totalProducts,
+        totalRetailers,
+        wholesaleOrders,
+        topSellingProducts,
+        revenueStats,
+        notifications
+      ] = await Promise.all([
+        Product.countDocuments({ wholesalerId: user._id, isActive: true }),
+        Order.distinct('userId', { wholesalerId: user._id }),
+        Order.find({ wholesalerId: user._id })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .populate('userId', 'name businessName')
+          .lean(),
+        Order.aggregate([
+          { $match: { wholesalerId: user._id } },
+          { $unwind: '$items' },
+          { $group: {
+            _id: '$items.productId',
+            productName: { $first: '$items.productName' },
+            totalQuantity: { $sum: '$items.quantity' },
+            totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+          }},
+          { $sort: { totalQuantity: -1 } },
+          { $limit: 10 }
+        ]),
+        Order.aggregate([
+          { $match: { wholesalerId: user._id } },
+          { $group: {
+            _id: null,
+            totalRevenue: { $sum: '$finalAmount' },
+            totalOrders: { $sum: 1 },
+            pendingOrders: { 
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } 
+            },
+            completedOrders: { 
+              $sum: { $cond: [{ $in: ['$status', ['delivered', 'shipped']] }, 1, 0] } 
+            }
+          }}
+        ]),
+        Notification.find({ userId: user._id, isRead: false })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .lean()
+      ]);
+
+      const productStats = await Product.aggregate([
+        { $match: { wholesalerId: user._id, isActive: true } },
+        { $group: {
+          _id: null,
+          totalProducts: { $sum: 1 },
+          inStock: { $sum: { $cond: [{ $gt: ['$stock', 0] }, 1, 0] } },
+          outOfStock: { $sum: { $cond: [{ $lte: ['$stock', 0] }, 1, 0] } },
+          totalInventoryValue: { $sum: { $multiply: ['$price', '$stock'] } }
+        }}
+      ]);
+
+      dashboardData = {
+        role: 'wholesaler',
+        stats: {
+          totalProducts: productStats[0]?.totalProducts || 0,
+          inStock: productStats[0]?.inStock || 0,
+          outOfStock: productStats[0]?.outOfStock || 0,
+          totalInventoryValue: productStats[0]?.totalInventoryValue || 0,
+          totalRetailers: totalRetailers.length,
+          totalRevenue: revenueStats[0]?.totalRevenue || 0,
+          totalOrders: revenueStats[0]?.totalOrders || 0,
+          pendingOrders: revenueStats[0]?.pendingOrders || 0,
+          completedOrders: revenueStats[0]?.completedOrders || 0,
+        },
+        topSellingProducts: topSellingProducts.map(product => ({
+          id: product._id.toString(),
+          name: product.productName,
+          totalQuantity: product.totalQuantity,
+          totalRevenue: product.totalRevenue,
+        })),
+        recentOrders: wholesaleOrders.map(order => ({
+          id: order._id.toString(),
+          retailerName: order.userId?.businessName || order.userId?.name || 'Unknown',
+          totalAmount: order.finalAmount,
+          status: order.status,
+          createdAt: order.createdAt.toISOString(),
+        })),
+        notifications: notifications.map(notif => ({
+          id: notif._id.toString(),
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          createdAt: notif.createdAt.toISOString(),
+        })),
+      };
+    }
+
+    res.json(successResponse(dashboardData));
+  } catch (error) {
+    console.error('Get dashboard error:', error);
+    res.status(500).json(errorResponse(createApiError('user', error.message), 'Failed to get dashboard'));
+  }
+};

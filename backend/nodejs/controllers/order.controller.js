@@ -3,8 +3,10 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Address = require('../models/Address');
 const Notification = require('../models/Notification');
-const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
+const { successResponse } = require('../utils/response.util');
 const { parsePagination, calculatePagination } = require('../utils/pagination.util');
+const { validateOrderPayload } = require('../utils/validation.util');
+const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/error.util');
 
 /**
  * Order Controller
@@ -16,16 +18,11 @@ const { parsePagination, calculatePagination } = require('../utils/pagination.ut
  * Create order (Customer)
  * Matching: OrderApiService.createOrder()
  */
-exports.createOrder = async (req, res) => {
+exports.createOrder = async (req, res, next) => {
   try {
     const user = req.user;
     if (user.role !== 'customer') {
-      return res.status(403).json(
-        errorResponse(
-          [createApiError('order', 'Only customers can create orders')],
-          'Access denied'
-        )
-      );
+      throw new ForbiddenError('Only customers can create orders');
     }
 
     const { items, deliveryAddressId, scheduledDeliveryDate, deliveryInstructions, paymentMethod, couponCode } = req.body;
@@ -35,12 +32,7 @@ exports.createOrder = async (req, res) => {
     if (!orderItems || orderItems.length === 0) {
       const cart = await Cart.findOne({ userId: user._id }).populate('items.productId');
       if (!cart || cart.items.length === 0) {
-        return res.status(400).json(
-          errorResponse(
-            [createApiError('order', 'Cart is empty')],
-            'Cannot create order with empty cart'
-          )
-        );
+        throw new ValidationError('Cart is empty. Cannot create order with empty cart', 'items');
       }
       orderItems = cart.items.map(item => ({
         productId: item.productId._id.toString(),
@@ -48,16 +40,40 @@ exports.createOrder = async (req, res) => {
       }));
     }
 
-    // Validate and fetch products
+    // Validate order payload
+    validateOrderPayload({ items: orderItems, paymentMethod });
+
+    // Re-fetch all products to ensure we have latest stock
     const productIds = orderItems.map(item => item.productId);
     const products = await Product.find({ _id: { $in: productIds }, isActive: true });
 
     if (products.length !== productIds.length) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('order', 'Some products are not available')],
-          'Invalid products in order'
-        )
+      const missingIds = productIds.filter(id => !products.find(p => p._id.toString() === id));
+      throw new NotFoundError(`Products not found: ${missingIds.join(', ')}`);
+    }
+
+    // Validate stock for ALL products BEFORE creating order (atomic check)
+    const stockErrors = [];
+    for (const item of orderItems) {
+      const product = products.find(p => p._id.toString() === item.productId);
+      if (!product) {
+        stockErrors.push(`Product ${item.productId} not found`);
+        continue;
+      }
+
+      if (product.stockQuantity === 0) {
+        stockErrors.push(`${product.name} is out of stock`);
+      } else if (product.stockQuantity < item.quantity) {
+        stockErrors.push(
+          `${product.name}: Insufficient stock. Available: ${product.stockQuantity}, Requested: ${item.quantity}`
+        );
+      }
+    }
+
+    if (stockErrors.length > 0) {
+      throw new ValidationError(
+        `Stock validation failed: ${stockErrors.join('; ')}`,
+        'items'
       );
     }
 
@@ -67,17 +83,6 @@ exports.createOrder = async (req, res) => {
 
     for (const item of orderItems) {
       const product = products.find(p => p._id.toString() === item.productId);
-      if (!product) continue;
-
-      if (product.stock < item.quantity) {
-        return res.status(400).json(
-          errorResponse(
-            [createApiError('order', `Insufficient stock for ${product.name}`)],
-            'Insufficient stock'
-          )
-        );
-      }
-
       const itemPrice = product.price * item.quantity;
       totalAmount += itemPrice;
 
@@ -142,11 +147,20 @@ exports.createOrder = async (req, res) => {
     const order = new Order(orderData);
     await order.save();
 
-    // Update product stock
+    // Update product stock (all or nothing - already validated)
     for (const item of orderItemsData) {
-      await Product.findByIdAndUpdate(item.productId, {
-        $inc: { stock: -item.quantity },
-      });
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        throw new NotFoundError(`Product ${item.productId} not found during stock update`);
+      }
+      
+      // Ensure stock never goes negative
+      const newStock = Math.max(0, product.stockQuantity - item.quantity);
+      product.stockQuantity = newStock;
+      if (newStock === 0) {
+        product.isActive = false; // Mark as unavailable if out of stock
+      }
+      await product.save();
     }
 
     // Clear cart if order was created from cart
@@ -194,8 +208,7 @@ exports.createOrder = async (req, res) => {
 
     res.json(successResponse(orderResponse, 'Order created successfully'));
   } catch (error) {
-    console.error('Create order error:', error);
-    res.status(500).json(errorResponse(createApiError('order', error.message), 'Failed to create order'));
+    next(error);
   }
 };
 
@@ -661,5 +674,367 @@ exports.getOrderHistory = async (req, res) => {
   } catch (error) {
     console.error('Get order history error:', error);
     res.status(500).json(errorResponse(createApiError('order', error.message), 'Failed to get order history'));
+  }
+};
+
+/**
+ * POST /orders/wholesale
+ * Create wholesale order (Retailer orders from Wholesaler)
+ * Matching: OrderApiService.createWholesaleOrder()
+ */
+exports.createWholesaleOrder = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'retailer') {
+      throw new ForbiddenError('Only retailers can create wholesale orders');
+    }
+
+    const { items, deliveryAddressId, scheduledDeliveryDate, deliveryInstructions, paymentMethod } = req.body;
+
+    // Validate wholesale order payload
+    validateWholesaleOrderPayload({ items, paymentMethod });
+
+    // Re-fetch all products to ensure we have latest stock
+    const productIds = items.map(item => item.productId);
+    const products = await Product.find({ 
+      _id: { $in: productIds }, 
+      wholesalerId: { $exists: true },
+      isActive: true 
+    });
+
+    if (products.length !== productIds.length) {
+      const missingIds = productIds.filter(id => !products.find(p => p._id.toString() === id));
+      throw new NotFoundError(`Wholesaler products not found: ${missingIds.join(', ')}`);
+    }
+
+    // Verify all products are from the same wholesaler
+    const wholesalerIds = [...new Set(products.map(p => p.wholesalerId?.toString()).filter(Boolean))];
+    if (wholesalerIds.length > 1) {
+      throw new ValidationError('All products must be from the same wholesaler', 'items');
+    }
+
+    if (wholesalerIds.length === 0) {
+      throw new ValidationError('Products must have a wholesaler', 'items');
+    }
+
+    const wholesalerId = products[0].wholesalerId;
+
+    // Validate stock for ALL products BEFORE creating order (atomic check)
+    const stockErrors = [];
+    for (const item of items) {
+      const product = products.find(p => p._id.toString() === item.productId);
+      if (!product) {
+        stockErrors.push(`Product ${item.productId} not found`);
+        continue;
+      }
+
+      if (product.stockQuantity === 0) {
+        stockErrors.push(`${product.name} is out of stock`);
+      } else if (product.stockQuantity < item.quantity) {
+        stockErrors.push(
+          `${product.name}: Insufficient stock. Available: ${product.stockQuantity}, Requested: ${item.quantity}`
+        );
+      }
+    }
+
+    if (stockErrors.length > 0) {
+      throw new ValidationError(
+        `Stock validation failed: ${stockErrors.join('; ')}`,
+        'items'
+      );
+    }
+
+    // Build order items with product details
+    let totalAmount = 0;
+    const orderItemsData = [];
+
+    for (const item of items) {
+      const product = products.find(p => p._id.toString() === item.productId);
+      const itemPrice = product.price * item.quantity;
+      totalAmount += itemPrice;
+
+      orderItemsData.push({
+        productId: product._id,
+        quantity: item.quantity,
+        price: product.price,
+        productName: product.name,
+        productImage: product.images?.[0] || null,
+      });
+    }
+
+    // Get delivery address
+    let deliveryAddress = null;
+    if (deliveryAddressId) {
+      const address = await Address.findOne({ _id: deliveryAddressId, userId: user._id });
+      if (address) {
+        deliveryAddress = {
+          label: address.label,
+          line1: address.line1,
+          line2: address.line2,
+          city: address.city,
+          region: address.region,
+          pincode: address.pincode,
+          lat: address.lat,
+          lng: address.lng,
+        };
+      }
+    }
+
+    // Create wholesale order
+    const orderData = {
+      userId: user._id, // Retailer is the customer
+      wholesalerId: wholesalerId,
+      items: orderItemsData,
+      totalAmount,
+      finalAmount: totalAmount,
+      status: 'pending',
+      paymentMethod: paymentMethod || 'cash_on_delivery',
+      paymentStatus: paymentMethod === 'cash_on_delivery' ? 'pending' : 'pending',
+      deliveryAddressId: deliveryAddressId || null,
+      deliveryAddress: deliveryAddress,
+      scheduledDeliveryDate: scheduledDeliveryDate ? new Date(scheduledDeliveryDate) : null,
+      deliveryInstructions,
+      trackingInfo: [{
+        status: 'pending',
+        message: 'Wholesale order placed',
+        timestamp: new Date(),
+      }],
+    };
+
+    const order = new Order(orderData);
+    await order.save();
+
+    // Update wholesaler product stock (decrement) - all or nothing
+    for (const item of orderItemsData) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        throw new NotFoundError(`Product ${item.productId} not found during stock update`);
+      }
+      
+      // Ensure stock never goes negative
+      const newStock = Math.max(0, product.stockQuantity - item.quantity);
+      product.stockQuantity = newStock;
+      if (newStock === 0) {
+        product.isActive = false; // Mark as unavailable if out of stock
+      }
+      await product.save();
+    }
+
+    // Increase retailer's proxy product stock (or create if not exists)
+    for (const item of orderItemsData) {
+      const wholesalerProduct = products.find(p => p._id.toString() === item.productId.toString());
+      
+      // Find or create proxy product for retailer
+      let proxyProduct = await Product.findOne({
+        retailerId: user._id,
+        sourceProductId: wholesalerProduct._id,
+      });
+
+      if (proxyProduct) {
+        // Update existing proxy product stock
+        proxyProduct.stockQuantity = (proxyProduct.stockQuantity || 0) + item.quantity;
+        await proxyProduct.save();
+      } else {
+        // Create new proxy product
+        const proxyProductData = {
+          name: wholesalerProduct.name,
+          description: wholesalerProduct.description,
+          price: wholesalerProduct.price,
+          stockQuantity: item.quantity,
+          categoryId: wholesalerProduct.categoryId,
+          images: wholesalerProduct.images,
+          weight: wholesalerProduct.weight,
+          region: wholesalerProduct.region || user.location?.region,
+          isLocal: wholesalerProduct.isLocal,
+          isActive: true,
+          retailerId: user._id,
+          wholesalerId: wholesalerProduct.wholesalerId,
+          sourceType: 'wholesaler',
+          sourceProductId: wholesalerProduct._id,
+        };
+        proxyProduct = new Product(proxyProductData);
+        await proxyProduct.save();
+      }
+    }
+
+    // Create notifications
+    // Notification for retailer
+    await Notification.create({
+      userId: user._id,
+      type: 'order',
+      title: 'Wholesale Order Placed',
+      message: `Your wholesale order #${order._id.toString().slice(-6)} has been placed successfully`,
+      data: { orderId: order._id.toString(), type: 'wholesale' },
+    });
+
+    // Notification for wholesaler
+    await Notification.create({
+      userId: wholesalerId,
+      type: 'order',
+      title: 'New Wholesale Order',
+      message: `Retailer ${user.businessName || user.name} placed a wholesale order #${order._id.toString().slice(-6)}`,
+      data: { orderId: order._id.toString(), type: 'wholesale', retailerId: user._id.toString() },
+    });
+
+    await order.populate('userId', 'name email businessName');
+    await order.populate('wholesalerId', 'name businessName');
+
+    // Format response (matching Dart OrderModel)
+    const orderResponse = {
+      id: order._id.toString(),
+      userId: order.userId._id.toString(),
+      userRole: 'retailer',
+      wholesalerId: order.wholesalerId._id.toString(),
+      items: order.items.map(item => ({
+        productId: item.productId.toString(),
+        quantity: item.quantity,
+        price: item.price,
+        productName: item.productName,
+        totalPrice: item.price * item.quantity,
+      })),
+      totalAmount: order.totalAmount,
+      finalAmount: order.finalAmount,
+      paymentMethod: order.paymentMethod,
+      deliveryAddress: order.deliveryAddress,
+      scheduledDeliveryDate: order.scheduledDeliveryDate?.toISOString(),
+      deliveryInstructions: order.deliveryInstructions,
+      status: order.status,
+      createdAt: order.createdAt.toISOString(),
+      updatedAt: order.updatedAt.toISOString(),
+    };
+
+    res.json(successResponse(orderResponse, 'Wholesale order created successfully'));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /orders/wholesale/retailer
+ * Get wholesale orders for retailer (orders placed by retailer to wholesalers)
+ * Matching: OrderApiService.getWholesaleOrdersForRetailer()
+ */
+exports.getWholesaleOrdersForRetailer = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'retailer') {
+      return res.status(403).json(
+        errorResponse(
+          [createApiError('order', 'Only retailers can access this endpoint')],
+          'Access denied'
+        )
+      );
+    }
+
+    const pagination = parsePagination(req.query);
+    const { status } = req.query;
+
+    const query = { 
+      userId: user._id, 
+      wholesalerId: { $exists: true, $ne: null } 
+    };
+    if (status) query.status = status;
+
+    const [orders, totalItems] = await Promise.all([
+      Order.find(query)
+        .populate('wholesalerId', 'name businessName')
+        .sort({ placedAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .lean(),
+      Order.countDocuments(query),
+    ]);
+
+    const ordersResponse = orders.map(order => ({
+      id: order._id.toString(),
+      userId: order.userId.toString(),
+      userRole: 'retailer',
+      wholesalerId: order.wholesalerId?._id.toString(),
+      wholesalerName: order.wholesalerId?.businessName || order.wholesalerId?.name,
+      items: order.items.map(item => ({
+        productId: item.productId.toString(),
+        quantity: item.quantity,
+        price: item.price,
+        productName: item.productName,
+        totalPrice: item.price * item.quantity,
+      })),
+      totalAmount: order.totalAmount,
+      finalAmount: order.finalAmount,
+      status: order.status,
+      createdAt: order.createdAt.toISOString(),
+    }));
+
+    const paginationMeta = calculatePagination(totalItems, pagination.page, pagination.pageSize);
+
+    res.json(successResponse({
+      data: ordersResponse,
+      ...paginationMeta,
+    }));
+  } catch (error) {
+    console.error('Get wholesale orders for retailer error:', error);
+    res.status(500).json(errorResponse(createApiError('order', error.message), 'Failed to get wholesale orders'));
+  }
+};
+
+/**
+ * GET /orders/wholesale/wholesaler
+ * Get wholesale orders for wholesaler (orders received from retailers)
+ * Matching: OrderApiService.getWholesaleOrdersForWholesaler()
+ */
+exports.getWholesaleOrdersForWholesaler = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'wholesaler') {
+      return res.status(403).json(
+        errorResponse(
+          [createApiError('order', 'Only wholesalers can access this endpoint')],
+          'Access denied'
+        )
+      );
+    }
+
+    const pagination = parsePagination(req.query);
+    const { status } = req.query;
+
+    const query = { wholesalerId: user._id };
+    if (status) query.status = status;
+
+    const [orders, totalItems] = await Promise.all([
+      Order.find(query)
+        .populate('userId', 'name email businessName')
+        .sort({ placedAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .lean(),
+      Order.countDocuments(query),
+    ]);
+
+    const ordersResponse = orders.map(order => ({
+      id: order._id.toString(),
+      userId: order.userId._id.toString(),
+      userRole: 'retailer',
+      retailerName: order.userId.businessName || order.userId.name,
+      items: order.items.map(item => ({
+        productId: item.productId.toString(),
+        quantity: item.quantity,
+        price: item.price,
+        productName: item.productName,
+        totalPrice: item.price * item.quantity,
+      })),
+      totalAmount: order.totalAmount,
+      finalAmount: order.finalAmount,
+      status: order.status,
+      createdAt: order.createdAt.toISOString(),
+    }));
+
+    const paginationMeta = calculatePagination(totalItems, pagination.page, pagination.pageSize);
+
+    res.json(successResponse({
+      data: ordersResponse,
+      ...paginationMeta,
+    }));
+  } catch (error) {
+    console.error('Get wholesale orders for wholesaler error:', error);
+    res.status(500).json(errorResponse(createApiError('order', error.message), 'Failed to get wholesale orders'));
   }
 };

@@ -1,6 +1,8 @@
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
+const { successResponse } = require('../utils/response.util');
+const { validateCartItemPayload } = require('../utils/validation.util');
+const { ValidationError, NotFoundError } = require('../utils/error.util');
 
 /**
  * Cart Controller
@@ -31,7 +33,7 @@ async function calculateCartTotals(items) {
  * Get cart
  * Matching: CartApiService.getCart()
  */
-exports.getCart = async (req, res) => {
+exports.getCart = async (req, res, next) => {
   try {
     let cart = await Cart.findOne({ userId: req.user._id }).populate('items.productId');
 
@@ -74,8 +76,7 @@ exports.getCart = async (req, res) => {
 
     res.json(successResponse(cartResponse));
   } catch (error) {
-    console.error('Get cart error:', error);
-    res.status(500).json(errorResponse(createApiError('cart', error.message), 'Failed to get cart'));
+    next(error);
   }
 };
 
@@ -84,36 +85,33 @@ exports.getCart = async (req, res) => {
  * Add item to cart
  * Matching: CartApiService.addToCart()
  */
-exports.addToCart = async (req, res) => {
+exports.addToCart = async (req, res, next) => {
   try {
-    const { productId, quantity } = req.body;
+    // Validate input
+    validateCartItemPayload(req.body);
 
-    if (!productId || !quantity || quantity < 1) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('cart', 'Product ID and quantity (>=1) are required')],
-          'Validation error'
-        )
-      );
-    }
+    const { productId, quantity } = req.body;
+    const qty = parseInt(quantity);
 
     // Verify product exists and is active
     const product = await Product.findById(productId);
-    if (!product || !product.isActive) {
-      return res.status(404).json(
-        errorResponse(
-          [createApiError('cart', 'Product not found')],
-          'Product not found'
-        )
-      );
+    if (!product) {
+      throw new NotFoundError('Product not found');
     }
 
-    if (product.stock < quantity) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('cart', 'Insufficient stock')],
-          'Insufficient stock available'
-        )
+    if (!product.isActive) {
+      throw new ValidationError('Product is not available', 'productId');
+    }
+
+    // Check stock availability
+    if (product.stockQuantity === 0) {
+      throw new ValidationError('Product is out of stock', 'productId');
+    }
+
+    if (product.stockQuantity < qty) {
+      throw new ValidationError(
+        `Insufficient stock. Available: ${product.stockQuantity}, Requested: ${qty}`,
+        'quantity'
       );
     }
 
@@ -168,8 +166,7 @@ exports.addToCart = async (req, res) => {
 
     res.json(successResponse(cartResponse, 'Item added to cart'));
   } catch (error) {
-    console.error('Add to cart error:', error);
-    res.status(500).json(errorResponse(createApiError('cart', error.message), 'Failed to add item to cart'));
+    next(error);
   }
 };
 
@@ -178,52 +175,50 @@ exports.addToCart = async (req, res) => {
  * Update cart item quantity
  * Matching: CartApiService.updateCartItem()
  */
-exports.updateCartItem = async (req, res) => {
+exports.updateCartItem = async (req, res, next) => {
   try {
     const { itemId } = req.params;
     const { quantity } = req.body;
 
-    if (!quantity || quantity < 1) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('cart', 'Quantity must be at least 1')],
-          'Validation error'
-        )
-      );
+    // Validate quantity
+    const qty = parseInt(quantity);
+    if (isNaN(qty) || qty < 1) {
+      throw new ValidationError('Quantity must be at least 1', 'quantity');
     }
 
     const cart = await Cart.findOne({ userId: req.user._id });
     if (!cart) {
-      return res.status(404).json(
-        errorResponse(
-          [createApiError('cart', 'Cart not found')],
-          'Cart not found'
-        )
-      );
+      throw new NotFoundError('Cart not found');
     }
 
     const item = cart.items.id(itemId);
     if (!item) {
-      return res.status(404).json(
-        errorResponse(
-          [createApiError('cart', 'Cart item not found')],
-          'Cart item not found'
-        )
-      );
+      throw new NotFoundError('Cart item not found');
     }
 
-    // Check stock
+    // Re-fetch product to check current stock
     const product = await Product.findById(item.productId);
-    if (!product || product.stock < quantity) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('cart', 'Insufficient stock')],
-          'Insufficient stock available'
-        )
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
+
+    if (!product.isActive) {
+      throw new ValidationError('Product is not available', 'productId');
+    }
+
+    // Check stock availability
+    if (product.stockQuantity === 0) {
+      throw new ValidationError('Product is out of stock', 'productId');
+    }
+
+    if (product.stockQuantity < qty) {
+      throw new ValidationError(
+        `Insufficient stock. Available: ${product.stockQuantity}, Requested: ${qty}`,
+        'quantity'
       );
     }
 
-    item.quantity = quantity;
+    item.quantity = qty;
     await cart.save();
 
     // Calculate totals
@@ -255,8 +250,7 @@ exports.updateCartItem = async (req, res) => {
 
     res.json(successResponse(cartResponse, 'Cart item updated'));
   } catch (error) {
-    console.error('Update cart item error:', error);
-    res.status(500).json(errorResponse(createApiError('cart', error.message), 'Failed to update cart item'));
+    next(error);
   }
 };
 
@@ -265,21 +259,21 @@ exports.updateCartItem = async (req, res) => {
  * Remove item from cart
  * Matching: CartApiService.removeFromCart()
  */
-exports.removeFromCart = async (req, res) => {
+exports.removeFromCart = async (req, res, next) => {
   try {
     const { itemId } = req.params;
 
     const cart = await Cart.findOne({ userId: req.user._id });
     if (!cart) {
-      return res.status(404).json(
-        errorResponse(
-          [createApiError('cart', 'Cart not found')],
-          'Cart not found'
-        )
-      );
+      throw new NotFoundError('Cart not found');
     }
 
-    cart.items.id(itemId)?.remove();
+    const item = cart.items.id(itemId);
+    if (!item) {
+      throw new NotFoundError('Cart item not found');
+    }
+
+    item.remove();
     await cart.save();
 
     // Calculate totals
@@ -311,8 +305,7 @@ exports.removeFromCart = async (req, res) => {
 
     res.json(successResponse(cartResponse, 'Item removed from cart'));
   } catch (error) {
-    console.error('Remove from cart error:', error);
-    res.status(500).json(errorResponse(createApiError('cart', error.message), 'Failed to remove item from cart'));
+    next(error);
   }
 };
 
@@ -321,7 +314,7 @@ exports.removeFromCart = async (req, res) => {
  * Clear cart
  * Matching: CartApiService.clearCart()
  */
-exports.clearCart = async (req, res) => {
+exports.clearCart = async (req, res, next) => {
   try {
     const cart = await Cart.findOne({ userId: req.user._id });
     if (cart) {
@@ -331,7 +324,6 @@ exports.clearCart = async (req, res) => {
 
     res.json(successResponse(null, 'Cart cleared'));
   } catch (error) {
-    console.error('Clear cart error:', error);
-    res.status(500).json(errorResponse(createApiError('cart', error.message), 'Failed to clear cart'));
+    next(error);
   }
 };

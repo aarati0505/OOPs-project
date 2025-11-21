@@ -15,14 +15,14 @@ const cartSchema = new mongoose.Schema({
     ref: 'User', 
     required: true,
     unique: true,
+    index: true,
   },
   items: [cartItemSchema],
 }, {
   timestamps: true,
 });
 
-// Indexes
-cartSchema.index({ userId: 1 });
+// Indexes (userId already indexed via unique: true)
 
 const Cart = mongoose.model('Cart', cartSchema);
 

@@ -13,8 +13,8 @@ android {
     // 2. Check "Show Package Details" 
     // 3. Expand "NDK (Side by side)" and install version 27.0.12077973
     // 4. Then uncomment the line below and remove this comment block
-    // ndkVersion = "27.0.12077973"
-    ndkVersion = "26.3.11579264" // Temporary: using existing NDK (backward compatible)
+    ndkVersion = "27.0.12077973"
+     // Temporary: using existing NDK (backward compatible)
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

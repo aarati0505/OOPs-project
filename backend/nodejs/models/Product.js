@@ -22,6 +22,16 @@ const productSchema = new mongoose.Schema({
   region: { type: String }, // Region for filtering
   images: [{ type: String }], // Array of image URLs
   weight: { type: String }, // e.g., "1kg", "500g"
+  // Proxy inventory fields
+  sourceType: { 
+    type: String, 
+    enum: ["retailer", "wholesaler"], 
+    default: "retailer" 
+  },
+  sourceProductId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "Product" 
+  }, // Reference to wholesaler's original product
   // Additional fields
   isActive: { type: Boolean, default: true },
   views: { type: Number, default: 0 },
@@ -37,6 +47,8 @@ productSchema.index({ retailerId: 1 });
 productSchema.index({ wholesalerId: 1 });
 productSchema.index({ region: 1 });
 productSchema.index({ isLocal: 1 });
+productSchema.index({ sourceProductId: 1 });
+productSchema.index({ sourceType: 1 });
 productSchema.index({ name: 'text', description: 'text' }); // Text search
 productSchema.index({ price: 1 });
 productSchema.index({ isActive: 1 });

@@ -22,8 +22,8 @@ const locationSchema = new mongoose.Schema({
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, lowercase: true },
-  phone: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true, index: true },
+  phone: { type: String, required: true, unique: true, index: true },
   passwordHash: { type: String, required: true },
   role: {
     type: String,
@@ -43,9 +43,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true, // Adds createdAt and updatedAt
 });
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
+// Indexes (email and phone already indexed via unique: true)
 userSchema.index({ role: 1 });
 userSchema.index({ 'location.region': 1 });
 

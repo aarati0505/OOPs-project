@@ -82,6 +82,15 @@ class AppConstants {
   static const String processPaymentEndpoint = '/payment/process';
   static const String paymentHistoryEndpoint = '/payment/history';
 
+  // Dashboard Endpoints (NEW)
+  static const String dashboardEndpoint = '/users/dashboard';
+
+  // Wholesale Endpoints (NEW)
+  static const String importFromWholesalerEndpoint = '/inventory/import-from-wholesaler';
+  static const String createWholesaleOrderEndpoint = '/orders/wholesale';
+  static const String wholesaleOrdersRetailerEndpoint = '/orders/wholesale/retailer';
+  static const String wholesaleOrdersWholesalerEndpoint = '/orders/wholesale/wholesaler';
+
   // Pagination
   static const int defaultPageSize = 20;
   static const int maxPageSize = 100;

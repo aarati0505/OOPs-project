@@ -21,4 +21,7 @@ router.delete('/products/:productId', authenticateToken, requireAuth, inventoryC
 // PATCH /inventory/stock/:productId
 router.patch('/stock/:productId', authenticateToken, requireAuth, inventoryController.updateStock);
 
+// POST /inventory/import-from-wholesaler
+router.post('/import-from-wholesaler', authenticateToken, requireAuth, inventoryController.importProductFromWholesaler);
+
 module.exports = router;

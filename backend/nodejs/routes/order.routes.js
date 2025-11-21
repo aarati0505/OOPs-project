@@ -21,5 +21,14 @@ router.patch('/:orderId', authenticateToken, requireAuth, orderController.update
 // GET /orders/:orderId/tracking
 router.get('/:orderId/tracking', authenticateToken, requireAuth, orderController.trackOrder);
 
+// POST /orders/wholesale
+router.post('/wholesale', authenticateToken, requireAuth, orderController.createWholesaleOrder);
+
+// GET /orders/wholesale/retailer
+router.get('/wholesale/retailer', authenticateToken, requireAuth, orderController.getWholesaleOrdersForRetailer);
+
+// GET /orders/wholesale/wholesaler
+router.get('/wholesale/wholesaler', authenticateToken, requireAuth, orderController.getWholesaleOrdersForWholesaler);
+
 module.exports = router;
 

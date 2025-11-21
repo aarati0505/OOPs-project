@@ -3,6 +3,9 @@ const router = express.Router();
 const userController = require('../controllers/user.controller');
 const { authenticateToken, requireAuth } = require('../middleware/auth.middleware');
 
+// GET /users/dashboard
+router.get('/dashboard', authenticateToken, requireAuth, userController.getDashboard);
+
 // GET /users/profile
 router.get('/profile', authenticateToken, requireAuth, userController.getUserProfile);
 

@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const OtpToken = require('../models/OtpToken');
-const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
+const { successResponse } = require('../utils/response.util');
+const { validateSignupPayload, validateLoginPayload } = require('../utils/validation.util');
+const { ValidationError, NotFoundError, UnauthorizedError } = require('../utils/error.util');
 const {
   hashPassword,
   comparePassword,
@@ -26,18 +28,12 @@ const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
  * Login with email/phone and password
  * Matching: AuthApiService.login()
  */
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
-    const { emailOrPhone, password } = req.body;
+    // Validate login payload
+    validateLoginPayload(req.body);
 
-    if (!emailOrPhone || !password) {
-      return res.status(400).json(
-        errorResponse(
-          [createApiError('auth', 'Email/phone and password are required')],
-          'Validation error'
-        )
-      );
-    }
+    const { emailOrPhone, password } = req.body;
 
     // Find user by email or phone
     const user = await User.findOne({
@@ -48,23 +44,13 @@ exports.login = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json(
-        errorResponse(
-          [createApiError('auth', 'Invalid credentials')],
-          'Login failed'
-        )
-      );
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     // Verify password
     const isPasswordValid = await comparePassword(password, user.passwordHash);
     if (!isPasswordValid) {
-      return res.status(401).json(
-        errorResponse(
-          [createApiError('auth', 'Invalid credentials')],
-          'Login failed'
-        )
-      );
+      throw new UnauthorizedError('Invalid credentials');
     }
 
     // Update last login
@@ -74,8 +60,7 @@ exports.login = async (req, res) => {
     const tokens = await issueAuthTokens(user);
     res.json(successResponse(tokens, 'Login successful'));
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Login failed'));
+    next(error);
   }
 };
 
@@ -84,8 +69,11 @@ exports.login = async (req, res) => {
  * Sign up new user
  * Matching: AuthApiService.signup()
  */
-exports.signup = async (req, res) => {
+exports.signup = async (req, res, next) => {
   try {
+    // Validate signup payload
+    validateSignupPayload(req.body);
+
     const {
       name,
       email,
@@ -389,7 +377,10 @@ exports.requestOtp = async (req, res) => {
       expiresAt,
     });
 
-    console.log(`OTP for ${phoneNumber}: ${otpCode}`); // TODO: Integrate SMS/email provider
+    // OTP sent (masked in logs for security)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`OTP requested for ${phoneNumber}`); // Don't log actual OTP code
+    }
 
     res.json(successResponse(
       { phoneNumber },
