@@ -1,14 +1,18 @@
 require('dotenv').config();
 const app = require('./app');
 const { connect: connectDatabase } = require('./config/database');
+const { initializeFirebase } = require('./services/firebase.service');
 
 const PORT = process.env.PORT || 3000;
 
 // Start server
 async function startServer() {
   try {
-    // Connect to database (when implemented)
+    // Connect to database
     await connectDatabase();
+    
+    // Initialize Firebase (optional - will work without it)
+    initializeFirebase();
 
     // Start listening
     app.listen(PORT, () => {

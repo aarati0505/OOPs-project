@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-// import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'core/routes/app_routes.dart';
 import 'core/routes/on_generate_route.dart';
@@ -9,14 +9,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase
-  // TODO: Add firebase_options.dart file after running:
-  // flutterfire configure
-  // Uncomment the import above and the code below when Firebase is configured:
-  // try {
-  //   await Firebase.initializeApp();
-  // } catch (e) {
-  //   debugPrint('Firebase initialization error: $e');
-  // }
+  try {
+    await Firebase.initializeApp();
+    debugPrint('✅ Firebase initialized successfully');
+  } catch (e) {
+    debugPrint('⚠️ Firebase initialization error: $e');
+    debugPrint('App will continue without Firebase features');
+  }
   
   runApp(const MyApp());
 }

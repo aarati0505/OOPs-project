@@ -37,7 +37,7 @@
 2. **Start MongoDB Service:**
    ```powershell
    # Check service status
-   Get-Service MongoDB
+  mongodb://localhost:27017/
    
    # Start service
    Start-Service MongoDB

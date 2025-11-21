@@ -37,6 +37,11 @@ class SignUpButton extends StatelessWidget {
         return;
       }
 
+      print('=== DEBUG SIGNUP ===');
+      print('Selected role: ${selectedRole?.name}');
+      print('Business name: ${businessNameController.text}');
+      print('=== END DEBUG ===');
+
       // TODO: Store registration data temporarily (could use SharedPreferences or Provider)
       // For now, navigate to OTP verification with phone number
       Navigator.pushNamed(

@@ -50,8 +50,15 @@ class VerifiedDialog extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, AppRoutes.entryPoint),
+                onPressed: () {
+                  // Use pushNamedAndRemoveUntil to clear the navigation stack
+                  // This ensures the user can't go back to OTP/signup screens
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    AppRoutes.entryPoint,
+                    (route) => false,
+                  );
+                },
                 child: const Text('Browse Home'),
               ),
             ),

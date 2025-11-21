@@ -39,6 +39,12 @@ class _EntryPointUIState extends State<EntryPointUI> {
     final authService = AuthService();
     final user = await authService.getCurrentUser();
     
+    print('=== DEBUG ENTRYPOINT ===');
+    print('User loaded: ${user != null}');
+    print('User role: ${user?.role.name}');
+    print('User name: ${user?.name}');
+    print('=== END DEBUG ===');
+    
     if (mounted) {
       setState(() {
         _currentUser = user;

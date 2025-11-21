@@ -53,5 +53,11 @@ node_modules
 .idea
 .DS_Store
 android/app/build
+android/build/
 *.log
+
+# Firebase service account (NEVER commit these!)
+*firebase-adminsdk*.json
+google-services.json
+GoogleService-Info.plist
 

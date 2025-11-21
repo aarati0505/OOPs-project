@@ -1,6 +1,6 @@
 class AppConstants {
   // API Configuration
-  static const String apiBaseUrl = 'https://api.yourdomain.com/v1'; // Change this to your API URL
+  static const String apiBaseUrl = 'http://localhost:3000/v1'; // Local backend server
   static const String apiTimeout = '30s';
 
   // API Endpoints

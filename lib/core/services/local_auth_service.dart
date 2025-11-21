@@ -9,6 +9,8 @@ class LocalAuthService {
   static const String _userEmailKey = 'user_email';
   static const String _userPhoneKey = 'user_phone';
   static const String _userRoleKey = 'user_role';
+  static const String _businessNameKey = 'business_name';
+  static const String _businessAddressKey = 'business_address';
 
   // Check if user is logged in locally
   static Future<bool> isLoggedIn() async {
@@ -23,6 +25,8 @@ class LocalAuthService {
     required String email,
     required String phoneNumber,
     required UserRole role,
+    String? businessName,
+    String? businessAddress,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_isLoggedInKey, true);
@@ -31,6 +35,14 @@ class LocalAuthService {
     await prefs.setString(_userEmailKey, email);
     await prefs.setString(_userPhoneKey, phoneNumber);
     await prefs.setString(_userRoleKey, role.name);
+    
+    // Save business information for retailers and wholesalers
+    if (businessName != null) {
+      await prefs.setString(_businessNameKey, businessName);
+    }
+    if (businessAddress != null) {
+      await prefs.setString(_businessAddressKey, businessAddress);
+    }
   }
 
   // Get local user
@@ -57,12 +69,18 @@ class LocalAuthService {
       orElse: () => UserRole.customer,
     );
 
+    // Get business information if available
+    final businessName = prefs.getString(_businessNameKey);
+    final businessAddress = prefs.getString(_businessAddressKey);
+
     return UserModel(
       id: userId,
       name: name,
       email: email,
       phoneNumber: phoneNumber,
       role: role,
+      businessName: businessName,
+      businessAddress: businessAddress,
       isEmailVerified: false,
       isPhoneVerified: false,
       createdAt: DateTime.now(),
@@ -78,6 +96,8 @@ class LocalAuthService {
     await prefs.remove(_userEmailKey);
     await prefs.remove(_userPhoneKey);
     await prefs.remove(_userRoleKey);
+    await prefs.remove(_businessNameKey);
+    await prefs.remove(_businessAddressKey);
   }
 }
 
