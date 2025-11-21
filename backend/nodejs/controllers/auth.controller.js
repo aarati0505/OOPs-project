@@ -1,305 +1,510 @@
-// Authentication Controller
-// This is where you implement the actual logic for each endpoint
-
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const OtpToken = require('../models/OtpToken');
+const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
+const {
+  hashPassword,
+  comparePassword,
+  generateAccessToken,
+  generateRefreshToken,
+  verifyToken,
+  generateOtpCode,
+  hashOtpCode,
+  verifyOtpCode,
+} = require('../services/auth.service');
+const { resolveUserLocation } = require('../services/location.service');
 
+const ALLOWED_ROLES = ['customer', 'retailer', 'wholesaler'];
+const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10);
 
-// Login
-exports.login = async (req, res, next) => {
+/**
+ * Authentication Controller
+ * Matching Dart AuthApiService methods
+ */
+
+/**
+ * POST /auth/login
+ * Login with email/phone and password
+ * Matching: AuthApiService.login()
+ */
+exports.login = async (req, res) => {
   try {
     const { emailOrPhone, password } = req.body;
+
+    if (!emailOrPhone || !password) {
+      return res.status(400).json(
+        errorResponse(
+          [createApiError('auth', 'Email/phone and password are required')],
+          'Validation error'
+        )
+      );
+    }
 
     // Find user by email or phone
     const user = await User.findOne({
       $or: [
-        { email: emailOrPhone },
-        { phoneNumber: emailOrPhone }
-      ]
+        { email: emailOrPhone.toLowerCase() },
+        { phone: emailOrPhone },
+      ],
     });
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
+      return res.status(401).json(
+        errorResponse(
+          [createApiError('auth', 'Invalid credentials')],
+          'Login failed'
+        )
+      );
     }
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
+    const isPasswordValid = await comparePassword(password, user.passwordHash);
+    if (!isPasswordValid) {
+      return res.status(401).json(
+        errorResponse(
+          [createApiError('auth', 'Invalid credentials')],
+          'Login failed'
+        )
+      );
     }
-
-    // Generate tokens
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
 
     // Update last login
     user.lastLoginAt = new Date();
     await user.save();
 
-    // Return response matching Flutter ApiResponse format
-    res.json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          role: user.role,
-          profileImageUrl: user.profileImageUrl,
-          isEmailVerified: user.isEmailVerified,
-          isPhoneVerified: user.isPhoneVerified,
-          businessName: user.businessName,
-          businessAddress: user.businessAddress,
-          location: user.location,
-          createdAt: user.createdAt.toISOString(),
-          lastLoginAt: user.lastLoginAt.toISOString(),
-        },
-        accessToken,
-        refreshToken,
-      },
-    });
+    const tokens = await issueAuthTokens(user);
+    res.json(successResponse(tokens, 'Login successful'));
   } catch (error) {
-    next(error);
+    console.error('Login error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Login failed'));
   }
 };
 
-// Signup
-exports.signup = async (req, res, next) => {
+/**
+ * POST /auth/signup
+ * Sign up new user
+ * Matching: AuthApiService.signup()
+ */
+exports.signup = async (req, res) => {
   try {
     const {
       name,
       email,
       phoneNumber,
       password,
-      role,
+      role = 'customer',
       businessName,
       businessAddress,
+      locationInput,
       location,
     } = req.body;
 
-    // Check if user exists
+    if (!name || !email || !phoneNumber || !password) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Name, email, phone, and password are required')],
+        'Validation error',
+      ));
+    }
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Invalid role')],
+        'Validation error',
+      ));
+    }
+
     const existingUser = await User.findOne({
-      $or: [{ email }, { phoneNumber }],
+      $or: [{ email: email.toLowerCase() }, { phone: phoneNumber }],
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists',
-        errors: [{ field: 'email', message: 'Email or phone already registered' }],
-      });
+      return res.status(409).json(errorResponse(
+        [createApiError('auth', 'User already exists with this email or phone')],
+        'Signup failed',
+      ));
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
-    // Create user
+    let normalizedLocation = null;
+    const rawLocation = locationInput || location;
+    if (rawLocation) {
+      normalizedLocation = await resolveUserLocation(rawLocation);
+    }
+
     const user = new User({
       name,
-      email,
-      phoneNumber,
-      password: hashedPassword,
+      email: email.toLowerCase(),
+      phone: phoneNumber,
+      passwordHash,
       role,
-      businessName: role !== 'customer' ? businessName : undefined,
-      businessAddress: role !== 'customer' ? businessAddress : undefined,
-      location,
-      createdAt: new Date(),
+      isEmailVerified: false,
+      isPhoneVerified: false,
+      businessName,
+      businessAddress,
+      location: normalizedLocation,
     });
-
     await user.save();
 
-    // Generate tokens
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const tokens = await issueAuthTokens(user);
 
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Signup successful',
-      data: {
-        user: {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          role: user.role,
-          businessName: user.businessName,
-          businessAddress: user.businessAddress,
-          isEmailVerified: user.isEmailVerified,
-          isPhoneVerified: user.isPhoneVerified,
-          createdAt: user.createdAt.toISOString(),
-        },
-        accessToken,
-        refreshToken,
-      },
-    });
+    res.json(successResponse(tokens, 'Signup successful'));
   } catch (error) {
-    next(error);
+    console.error('Signup error:', error);
+    if (error.code === 11000) {
+      return res.status(409).json(
+        errorResponse(
+          [createApiError('auth', 'User already exists')],
+          'Signup failed'
+        )
+      );
+    }
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Signup failed'));
   }
 };
 
-// Verify OTP
-exports.verifyOtp = async (req, res, next) => {
+/**
+ * POST /auth/verify-otp
+ * Verify OTP for phone number
+ * Matching: AuthApiService.verifyOtp()
+ */
+exports.verifyOtp = async (req, res) => {
   try {
-    const { phoneNumber, otp } = req.body;
+    const { phoneNumber, otp, role = 'customer', name, email } = req.body;
 
-    // Verify OTP logic here
-    // This depends on your OTP service (Firebase Auth, Twilio, etc.)
-
-    const user = await User.findOne({ phoneNumber });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+    if (!phoneNumber || !otp) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Phone number and OTP are required')],
+        'Validation error',
+      ));
     }
 
-    // Mark phone as verified
-    user.isPhoneVerified = true;
-    await user.save();
+    const otpToken = await OtpToken.findOne({ phoneNumber }).sort({ createdAt: -1 });
+    if (!otpToken) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'OTP not requested or expired')],
+        'OTP verification failed',
+      ));
+    }
 
-    // Generate tokens
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    if (otpToken.expiresAt < new Date()) {
+      await OtpToken.deleteMany({ phoneNumber });
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'OTP expired')],
+        'OTP verification failed',
+      ));
+    }
 
-    res.json({
-      success: true,
-      message: 'OTP verified successfully',
-      data: {
-        user: {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          role: user.role,
-          isPhoneVerified: true,
-        },
-        accessToken,
-      },
-    });
+    const isValidOtp = await verifyOtpCode(otp, otpToken.otpHash);
+    if (!isValidOtp) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Invalid OTP')],
+        'OTP verification failed',
+      ));
+    }
+
+    await OtpToken.deleteMany({ phoneNumber });
+
+    let user = await User.findOne({ phone: phoneNumber });
+    if (!user) {
+      const assignedRole = ALLOWED_ROLES.includes(role) ? role : 'customer';
+      const placeholderPassword = await hashPassword(`otp-${Date.now()}`);
+      user = new User({
+        name: name || 'New User',
+        email: email || `${phoneNumber}@otp-login.local`,
+        phone: phoneNumber,
+        passwordHash: placeholderPassword,
+        role: assignedRole,
+        isPhoneVerified: true,
+        isEmailVerified: !!email,
+      });
+      await user.save();
+    } else {
+      user.isPhoneVerified = true;
+      await user.save();
+    }
+
+    const tokens = await issueAuthTokens(user);
+    res.json(successResponse(tokens, 'OTP verified successfully'));
   } catch (error) {
-    next(error);
+    console.error('OTP verification error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'OTP verification failed'));
   }
 };
 
-// Forgot Password
-exports.forgotPassword = async (req, res, next) => {
+/**
+ * POST /auth/forgot-password
+ * Request password reset
+ * Matching: AuthApiService.forgotPassword()
+ */
+exports.forgotPassword = async (req, res) => {
   try {
     const { emailOrPhone } = req.body;
 
+    if (!emailOrPhone) {
+      return res.status(400).json(
+        errorResponse(
+          [createApiError('auth', 'Email or phone is required')],
+          'Validation error'
+        )
+      );
+    }
+
     const user = await User.findOne({
-      $or: [{ email: emailOrPhone }, { phoneNumber: emailOrPhone }],
+      $or: [
+        { email: emailOrPhone.toLowerCase() },
+        { phone: emailOrPhone },
+      ],
     });
 
     if (!user) {
       // Don't reveal if user exists for security
-      return res.json({
-        success: true,
-        message: 'If user exists, password reset email sent',
-      });
+      return res.json(successResponse(null, 'If the account exists, a password reset email has been sent'));
     }
 
-    // Generate reset token and send email/SMS
-    // Implementation depends on your email/SMS service
+    // TODO: Generate reset token and send email/SMS
+    // For now, just return success
 
-    res.json({
-      success: true,
-      message: 'Password reset instructions sent',
-    });
+    res.json(successResponse(null, 'Password reset email sent'));
   } catch (error) {
-    next(error);
+    console.error('Forgot password error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Failed to send reset email'));
   }
 };
 
-// Reset Password
-exports.resetPassword = async (req, res, next) => {
+/**
+ * POST /auth/reset-password
+ * Reset password with token
+ * Matching: AuthApiService.resetPassword()
+ */
+exports.resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    // Verify token and update password
-    // Implementation here
-
-    res.json({
-      success: true,
-      message: 'Password reset successfully',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Logout
-exports.logout = async (req, res, next) => {
-  try {
-    // Optionally invalidate token or add to blacklist
-    res.json({
-      success: true,
-      message: 'Logged out successfully',
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Refresh Token
-exports.refreshToken = async (req, res, next) => {
-  try {
-    const { refreshToken } = req.body;
-
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid refresh token',
-      });
+    if (!token || !newPassword) {
+      return res.status(400).json(
+        errorResponse(
+          [createApiError('auth', 'Token and new password are required')],
+          'Validation error'
+        )
+      );
     }
 
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    // TODO: Verify reset token (from cache/DB)
+    // For now, decode token to get user ID (if using JWT for reset)
+    // In production, use a separate reset token system
 
-    res.json({
-      success: true,
-      data: {
-        accessToken,
-        refreshToken,
-      },
-    });
+    res.json(successResponse(null, 'Password reset successful'));
   } catch (error) {
-    next(error);
+    console.error('Reset password error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Password reset failed'));
   }
 };
 
+/**
+ * POST /auth/logout
+ * Logout user
+ * Matching: AuthApiService.logout()
+ */
+exports.logout = async (req, res) => {
+  try {
+    // Clear refresh token (stateless approach)
+    if (req.user) {
+      await User.findByIdAndUpdate(req.user._id, { $unset: { refreshToken: 1 } });
+    }
+
+    res.json(successResponse(null, 'Logout successful'));
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Logout failed'));
+  }
+};
+
+/**
+ * POST /auth/refresh
+ * Refresh access token
+ * Matching: AuthApiService.refreshToken()
+ */
+exports.refreshToken = async (req, res) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (!token) {
+      return res.status(400).json(
+        errorResponse(
+          [createApiError('auth', 'Refresh token is required')],
+          'Validation error'
+        )
+      );
+    }
+
+    // Verify refresh token
+    const decoded = await verifyToken(token);
+
+    // Find user and verify refresh token matches
+    const user = await User.findById(decoded.userId);
+    if (!user || user.refreshToken !== token) {
+      return res.status(401).json(
+        errorResponse(
+          [createApiError('auth', 'Invalid refresh token')],
+          'Token refresh failed'
+        )
+      );
+    }
+
+    const accessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    res.json(successResponse({
+      accessToken,
+      refreshToken: newRefreshToken,
+    }, 'Token refreshed successfully'));
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(401).json(errorResponse(createApiError('auth', error.message), 'Token refresh failed'));
+  }
+};
+
+exports.requestOtp = async (req, res) => {
+  try {
+    const { phoneNumber, purpose = 'login' } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Phone number is required')],
+        'Validation error',
+      ));
+    }
+
+    const otpCode = generateOtpCode();
+    const otpHash = await hashOtpCode(otpCode);
+    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await OtpToken.create({
+      phoneNumber,
+      otpHash,
+      purpose,
+      expiresAt,
+    });
+
+    console.log(`OTP for ${phoneNumber}: ${otpCode}`); // TODO: Integrate SMS/email provider
+
+    res.json(successResponse(
+      { phoneNumber },
+      'OTP sent successfully',
+      { devOtp: otpCode, expiresAt },
+    ));
+  } catch (error) {
+    console.error('Request OTP error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Failed to send OTP'));
+  }
+};
+
+exports.loginWithGoogle = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Google ID token is required')],
+        'Validation error',
+      ));
+    }
+
+    // TODO: Replace with real Google token verification
+    const profile = mockSocialVerification(idToken, 'google');
+    let user = await User.findOne({ email: profile.email });
+
+    if (!user) {
+      const placeholderPassword = await hashPassword(`google-${Date.now()}`);
+      user = new User({
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone || `+google_${Date.now()}`,
+        passwordHash: placeholderPassword,
+        role: 'customer',
+        isEmailVerified: true,
+      });
+      await user.save();
+    }
+
+    const tokens = await issueAuthTokens(user);
+    res.json(successResponse(tokens, 'Google login successful'));
+  } catch (error) {
+    console.error('Google login error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Google login failed'));
+  }
+};
+
+exports.loginWithFacebook = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json(errorResponse(
+        [createApiError('auth', 'Facebook token is required')],
+        'Validation error',
+      ));
+    }
+
+    // TODO: Replace with real Facebook token verification
+    const profile = mockSocialVerification(idToken, 'facebook');
+    let user = await User.findOne({ email: profile.email });
+
+    if (!user) {
+      const placeholderPassword = await hashPassword(`facebook-${Date.now()}`);
+      user = new User({
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone || `+fb_${Date.now()}`,
+        passwordHash: placeholderPassword,
+        role: 'customer',
+        isEmailVerified: true,
+      });
+      await user.save();
+    }
+
+    const tokens = await issueAuthTokens(user);
+    res.json(successResponse(tokens, 'Facebook login successful'));
+  } catch (error) {
+    console.error('Facebook login error:', error);
+    res.status(500).json(errorResponse(createApiError('auth', error.message), 'Facebook login failed'));
+  }
+};
+
+async function issueAuthTokens(user) {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  user.refreshToken = refreshToken;
+  await user.save();
+
+  const userResponse = {
+    id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    phoneNumber: user.phone,
+    role: user.role,
+    isEmailVerified: user.isEmailVerified,
+    isPhoneVerified: user.isPhoneVerified,
+    createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString(),
+    location: user.location,
+    businessName: user.businessName,
+    businessAddress: user.businessAddress,
+  };
+
+  return {
+    user: userResponse,
+    accessToken,
+    refreshToken,
+  };
+}
+
+function mockSocialVerification(idToken, provider) {
+  // TODO: Replace with real provider verification (Google/Facebook SDKs)
+  return {
+    name: provider === 'google' ? 'Google User' : 'Facebook User',
+    email: `${provider}_${idToken.slice(0, 6)}@example.com`,
+    phone: null,
+  };
+}

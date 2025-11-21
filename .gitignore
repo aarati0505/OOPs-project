@@ -47,3 +47,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+node_modules
+.env
+.vscode
+.idea
+.DS_Store
+android/app/build
+*.log
+

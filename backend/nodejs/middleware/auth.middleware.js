@@ -1,80 +1,73 @@
-// Authentication Middleware
-// Validates JWT tokens from Flutter app
-
-const jwt = require('jsonwebtoken');
+const { verifyToken } = require('../services/auth.service');
 const User = require('../models/User');
+const { errorResponse, createApiError } = require('../utils/response.util');
 
 /**
- * Middleware to authenticate requests
- * Extracts token from Authorization header: "Bearer <token>"
+ * Authentication middleware
  */
-exports.authenticateToken = async (req, res, next) => {
+
+/**
+ * Verify JWT token from Authorization header
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {function} next - Express next middleware
+ */
+async function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required',
-      });
+      req.user = null;
+      return next(); // Allow unauthenticated requests for some endpoints
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = await verifyToken(token);
     
-    // Optionally verify user still exists
-    const user = await User.findById(decoded.userId);
+    // Fetch user from database
+    const user = await User.findById(decoded.userId).select('-passwordHash -refreshToken');
+    
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token',
-      });
+      return res.status(401).json(
+        errorResponse(
+          [createApiError('auth', 'User not found')],
+          'Authentication failed'
+        )
+      );
     }
 
-    // Attach user info to request
-    req.user = {
-      userId: decoded.userId,
-      role: decoded.role,
-    };
-
+    req.user = user;
+    req.token = token;
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired',
-      });
-    }
-
-    return res.status(403).json({
-      success: false,
-      message: 'Invalid token',
-    });
+    return res.status(401).json(
+      errorResponse(
+        [createApiError('auth', error.message || 'Invalid token')],
+        'Authentication failed'
+      )
+    );
   }
-};
+}
 
 /**
- * Middleware to check user role
- * Usage: checkRole(['retailer', 'wholesaler'])
+ * Require authentication - returns 401 if no token
+ * @param {object} req - Express request
+ * @param {object} res - Express response
+ * @param {function} next - Express next middleware
  */
-exports.checkRole = (allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required',
-      });
-    }
+async function requireAuth(req, res, next) {
+  if (!req.user || !req.token) {
+    return res.status(401).json(
+      errorResponse(
+        [createApiError('auth', 'Authentication required')],
+        'Authentication required'
+      )
+    );
+  }
+  next();
+}
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions',
-      });
-    }
-
-    next();
-  };
+module.exports = {
+  authenticateToken,
+  requireAuth,
 };
-

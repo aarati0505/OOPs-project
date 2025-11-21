@@ -1,38 +1,50 @@
-// Database Configuration
-// Example for MongoDB with Mongoose
-
 const mongoose = require('mongoose');
 
-const connectDB = async () => {
+/**
+ * Database connection configuration
+ * MongoDB + Mongoose
+ */
+
+const connect = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce_db';
+    
+    const options = {
+      // Remove deprecated options - use defaults
+    };
+
+    await mongoose.connect(mongoUri, options);
+    
+    console.log('MongoDB connected successfully');
+    console.log(`Database: ${mongoose.connection.name}`);
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('MongoDB connection error:', err);
     });
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    mongoose.connection.on('disconnected', () => {
+      console.log('MongoDB disconnected');
+    });
+
+    return mongoose.connection;
   } catch (error) {
-    console.error('Database connection error:', error);
-    process.exit(1);
+    console.error('Failed to connect to MongoDB:', error);
+    throw error;
   }
 };
 
-module.exports = connectDB;
-
-// For PostgreSQL with Sequelize, use:
-/*
-const { Sequelize } = require('sequelize');
-
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    dialect: 'postgres',
+const disconnect = async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
+  } catch (error) {
+    console.error('Error closing MongoDB connection:', error);
+    throw error;
   }
-);
+};
 
-module.exports = sequelize;
-*/
-
+module.exports = {
+  connect,
+  disconnect,
+};

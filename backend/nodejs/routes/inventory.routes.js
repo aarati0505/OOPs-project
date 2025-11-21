@@ -1,53 +1,24 @@
-// Inventory Routes (Retailer/Wholesaler)
-// These endpoints match: lib/core/api/services/inventory_api_service.dart
-
 const express = require('express');
 const router = express.Router();
 const inventoryController = require('../controllers/inventory.controller');
-const { authenticateToken, checkRole } = require('../middleware/auth.middleware');
+const { authenticateToken, requireAuth } = require('../middleware/auth.middleware');
 
-// All routes require authentication and retailer/wholesaler role
-router.use(authenticateToken);
-router.use(checkRole(['retailer', 'wholesaler']));
+// GET /inventory
+router.get('/', authenticateToken, requireAuth, inventoryController.getInventory);
 
-/**
- * GET /v1/inventory
- * Matches: InventoryApiService.getInventory()
- * Query: page, pageSize, category, inStock
- */
-router.get('/', inventoryController.getInventory);
+// GET /inventory/stats
+router.get('/stats', authenticateToken, requireAuth, inventoryController.getInventoryStats);
 
-/**
- * GET /v1/inventory/stats
- * Matches: InventoryApiService.getInventoryStats()
- */
-router.get('/stats', inventoryController.getInventoryStats);
+// POST /inventory/products
+router.post('/products', authenticateToken, requireAuth, inventoryController.addProduct);
 
-/**
- * POST /v1/inventory/products
- * Matches: InventoryApiService.addProduct()
- * Request: ProductModel JSON
- */
-router.post('/products', inventoryController.addProduct);
+// PUT /inventory/products/:productId
+router.put('/products/:productId', authenticateToken, requireAuth, inventoryController.updateProduct);
 
-/**
- * PUT /v1/inventory/products/:productId
- * Matches: InventoryApiService.updateProduct()
- */
-router.put('/products/:productId', inventoryController.updateProduct);
+// DELETE /inventory/products/:productId
+router.delete('/products/:productId', authenticateToken, requireAuth, inventoryController.deleteProduct);
 
-/**
- * DELETE /v1/inventory/products/:productId
- * Matches: InventoryApiService.deleteProduct()
- */
-router.delete('/products/:productId', inventoryController.deleteProduct);
-
-/**
- * PATCH /v1/inventory/stock/:productId
- * Matches: InventoryApiService.updateStock()
- * Request: { quantity, operation: "add"|"subtract"|"set" }
- */
-router.patch('/stock/:productId', inventoryController.updateStock);
+// PATCH /inventory/stock/:productId
+router.patch('/stock/:productId', authenticateToken, requireAuth, inventoryController.updateStock);
 
 module.exports = router;
-
