@@ -24,7 +24,11 @@ class ProductTileSquare extends StatelessWidget {
         color: AppColors.scaffoldBackground,
         child: InkWell(
           borderRadius: AppDefaults.borderRadius,
-          onTap: () => Navigator.pushNamed(context, AppRoutes.productDetails),
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.productDetails,
+            arguments: data,
+          ),
           child: Container(
             width: 176,
             height: 296,

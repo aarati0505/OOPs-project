@@ -117,7 +117,10 @@ class RouteGenerator {
         return CupertinoPageRoute(builder: (_) => const BundleDetailsPage());
 
       case AppRoutes.productDetails:
-        return CupertinoPageRoute(builder: (_) => const ProductDetailsPage());
+        return CupertinoPageRoute(
+          builder: (_) => const ProductDetailsPage(),
+          settings: settings, // Pass the settings with arguments
+        );
 
       case AppRoutes.createMyPack:
         return CupertinoPageRoute(builder: (_) => const BundleCreatePage());

@@ -9,11 +9,15 @@ class PriceAndQuantityRow extends StatefulWidget {
     required this.currentPrice,
     required this.orginalPrice,
     required this.quantity,
+    this.onIncrement,
+    this.onDecrement,
   });
 
   final double currentPrice;
   final double orginalPrice;
   final int quantity;
+  final void Function()? onIncrement;
+  final void Function()? onDecrement;
 
   @override
   State<PriceAndQuantityRow> createState() => _PriceAndQuantityRowState();
@@ -23,14 +27,22 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
   int quantity = 1;
 
   onQuantityIncrease() {
-    quantity++;
-    setState(() {});
+    if (widget.onIncrement != null) {
+      widget.onIncrement!();
+    } else {
+      quantity++;
+      setState(() {});
+    }
   }
 
   onQuantityDecrease() {
-    if (quantity > 1) {
-      quantity--;
-      setState(() {});
+    if (widget.onDecrement != null) {
+      widget.onDecrement!();
+    } else {
+      if (quantity > 1) {
+        quantity--;
+        setState(() {});
+      }
     }
   }
 
@@ -45,12 +57,14 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
 
   @override
   Widget build(BuildContext context) {
+    final displayQuantity = widget.onIncrement != null ? widget.quantity : quantity;
+    
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         /* <---- Price -----> */
         Text(
-          '₹30',
+          '₹${widget.orginalPrice.toStringAsFixed(0)}',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
@@ -59,7 +73,7 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
         ),
         const SizedBox(width: AppDefaults.padding),
         Text(
-          '₹20',
+          '₹${widget.currentPrice.toStringAsFixed(0)}',
           style: Theme.of(context)
               .textTheme
               .headlineSmall
@@ -78,7 +92,7 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
-                '$quantity',
+                '$displayQuantity',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.black,

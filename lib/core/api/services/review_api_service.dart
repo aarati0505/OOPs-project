@@ -1,176 +1,200 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../models/review_model.dart';
 import '../../constants/app_constants.dart';
-import '../api_client.dart';
-import '../models/api_response.dart';
+import '../../services/local_auth_service.dart';
 
 class ReviewApiService {
-  // Get product reviews
-  static Future<PaginatedResponse<ProductReview>> getProductReviews({
-    required String productId,
-    String? token,
+  static const String baseUrl = AppConstants.apiBaseUrl;
+
+  // Get reviews for a product
+  static Future<List<ReviewModel>> getProductReviews(
+    String productId, {
     int page = 1,
-    int pageSize = AppConstants.defaultPageSize,
-    int? minRating,
+    int limit = 10,
   }) async {
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'pageSize': pageSize,
-      if (minRating != null) 'minRating': minRating,
-    };
+    try {
+      final url = Uri.parse(
+        '$baseUrl${AppConstants.reviewsEndpoint}/product/$productId?page=$page&limit=$limit',
+      );
 
-    final response = await ApiClient.get(
-      '${AppConstants.productReviewsEndpoint}/$productId',
-      token: token,
-      queryParameters: queryParams,
-    );
+      print('🔍 Fetching reviews for product: $productId');
+      print('🔗 URL: $url');
 
-    final json = ApiClient.handleResponse(response);
-    return PaginatedResponse.fromJson(
-      json['data'] as Map<String, dynamic>,
-      (item) => ProductReview.fromJson(item as Map<String, dynamic>),
-    );
-  }
+      final response = await http.get(url);
 
-  // Create review
-  static Future<ApiResponse<ProductReview>> createReview({
-    required String token,
-    required String productId,
-    required String orderId,
-    required double rating,
-    required String comment,
-  }) async {
-    final response = await ApiClient.post(
-      AppConstants.createReviewEndpoint,
-      token: token,
-      body: {
-        'productId': productId,
-        'orderId': orderId,
-        'rating': rating,
-        'comment': comment,
-      },
-    );
+      print('📡 Response status: ${response.statusCode}');
 
-    final json = ApiClient.handleResponse(response);
-    return ApiResponse.fromJson(
-      json,
-      (data) => ProductReview.fromJson(data as Map<String, dynamic>),
-    );
-  }
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        
+        if (jsonData['success'] == true) {
+          final List<dynamic> reviewsJson = jsonData['data'] ?? [];
+          final reviews = reviewsJson
+              .map((json) => ReviewModel.fromJson(json))
+              .toList();
 
-  // Update review
-  static Future<ApiResponse<ProductReview>> updateReview({
-    required String token,
-    required String reviewId,
-    double? rating,
-    String? comment,
-  }) async {
-    final response = await ApiClient.put(
-      '${AppConstants.updateReviewEndpoint}/$reviewId',
-      token: token,
-      body: {
-        if (rating != null) 'rating': rating,
-        if (comment != null) 'comment': comment,
-      },
-    );
-
-    final json = ApiClient.handleResponse(response);
-    return ApiResponse.fromJson(
-      json,
-      (data) => ProductReview.fromJson(data as Map<String, dynamic>),
-    );
-  }
-
-  // Delete review
-  static Future<ApiResponse<void>> deleteReview({
-    required String token,
-    required String reviewId,
-  }) async {
-    final response = await ApiClient.delete(
-      '${AppConstants.reviewsEndpoint}/$reviewId',
-      token: token,
-    );
-
-    final json = ApiClient.handleResponse(response);
-    return ApiResponse.fromJson(json, null);
+          print('✅ Loaded ${reviews.length} reviews');
+          return reviews;
+        } else {
+          print('⚠️ API returned success: false');
+          return [];
+        }
+      } else {
+        print('❌ Failed to load reviews: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return [];
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error fetching reviews: $e');
+      print('Stack trace: $stackTrace');
+      return [];
+    }
   }
 
   // Get review statistics for a product
-  static Future<ApiResponse<ReviewStatistics>> getReviewStatistics({
+  static Future<ReviewStats?> getProductReviewStats(String productId) async {
+    try {
+      final url = Uri.parse(
+        '$baseUrl${AppConstants.reviewsEndpoint}/product/$productId/stats',
+      );
+
+      print('📊 Fetching review stats for product: $productId');
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        
+        if (jsonData['success'] == true) {
+          return ReviewStats.fromJson(jsonData['data']);
+        }
+      }
+      
+      return null;
+    } catch (e) {
+      print('❌ Error fetching review stats: $e');
+      return null;
+    }
+  }
+
+  // Create a review (requires authentication)
+  static Future<Map<String, dynamic>> createReview({
     required String productId,
+    required int rating,
+    required String comment,
+    String? orderId,
+    String? authToken,
+    String? userEmail,
   }) async {
-    final response = await ApiClient.get(
-      '${AppConstants.productReviewsEndpoint}/$productId/statistics',
-    );
+    try {
+      final url = Uri.parse('$baseUrl${AppConstants.reviewsEndpoint}');
 
-    final json = ApiClient.handleResponse(response);
-    return ApiResponse.fromJson(
-      json,
-      (data) => ReviewStatistics.fromJson(data as Map<String, dynamic>),
-    );
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${authToken ?? 'dev-token'}',
+        if (userEmail != null) 'x-user-email': userEmail,
+      };
+
+      final body = json.encode({
+        'productId': productId,
+        'rating': rating,
+        'comment': comment,
+        if (orderId != null) 'orderId': orderId,
+      });
+
+      print('📝 Creating review for product: $productId');
+      print('👤 User email: $userEmail');
+
+      final response = await http.post(url, headers: headers, body: body);
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📄 Response body: ${response.body}');
+
+      final jsonData = json.decode(response.body);
+
+      if (response.statusCode == 201) {
+        print('✅ Review created successfully');
+        return {
+          'success': true,
+          'message': jsonData['message'] ?? 'Review created successfully',
+        };
+      } else {
+        print('❌ Failed to create review: ${response.statusCode}');
+        print('Response: ${response.body}');
+        return {
+          'success': false,
+          'message': jsonData['message'] ?? 'Failed to submit review',
+        };
+      }
+    } catch (e) {
+      print('❌ Error creating review: $e');
+      return {
+        'success': false,
+        'message': 'Network error. Please try again.',
+      };
+    }
+  }
+
+  // Update a review (requires authentication)
+  static Future<bool> updateReview({
+    required String reviewId,
+    int? rating,
+    String? comment,
+    required String authToken,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl${AppConstants.reviewsEndpoint}/$reviewId');
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $authToken',
+      };
+
+      final body = json.encode({
+        if (rating != null) 'rating': rating,
+        if (comment != null) 'comment': comment,
+      });
+
+      final response = await http.put(url, headers: headers, body: body);
+
+      if (response.statusCode == 200) {
+        print('✅ Review updated successfully');
+        return true;
+      } else {
+        print('❌ Failed to update review: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error updating review: $e');
+      return false;
+    }
+  }
+
+  // Delete a review (requires authentication)
+  static Future<bool> deleteReview({
+    required String reviewId,
+    required String authToken,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl${AppConstants.reviewsEndpoint}/$reviewId');
+
+      final headers = {
+        'Authorization': 'Bearer $authToken',
+      };
+
+      final response = await http.delete(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        print('✅ Review deleted successfully');
+        return true;
+      } else {
+        print('❌ Failed to delete review: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error deleting review: $e');
+      return false;
+    }
   }
 }
-
-class ProductReview {
-  final String id;
-  final String productId;
-  final String userId;
-  final String userName;
-  final String? userImage;
-  final String orderId;
-  final double rating;
-  final String comment;
-  final DateTime createdAt;
-  final DateTime? updatedAt;
-
-  ProductReview({
-    required this.id,
-    required this.productId,
-    required this.userId,
-    required this.userName,
-    this.userImage,
-    required this.orderId,
-    required this.rating,
-    required this.comment,
-    required this.createdAt,
-    this.updatedAt,
-  });
-
-  factory ProductReview.fromJson(Map<String, dynamic> json) {
-    return ProductReview(
-      id: json['id'] ?? '',
-      productId: json['productId'] ?? '',
-      userId: json['userId'] ?? '',
-      userName: json['userName'] ?? '',
-      userImage: json['userImage'],
-      orderId: json['orderId'] ?? '',
-      rating: (json['rating'] ?? 0).toDouble(),
-      comment: json['comment'] ?? '',
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : null,
-    );
-  }
-}
-
-class ReviewStatistics {
-  final double averageRating;
-  final int totalReviews;
-  final Map<int, int> ratingDistribution; // {5: 10, 4: 5, ...}
-
-  ReviewStatistics({
-    required this.averageRating,
-    required this.totalReviews,
-    required this.ratingDistribution,
-  });
-
-  factory ReviewStatistics.fromJson(Map<String, dynamic> json) {
-    return ReviewStatistics(
-      averageRating: (json['averageRating'] ?? 0).toDouble(),
-      totalReviews: json['totalReviews'] ?? 0,
-      ratingDistribution: Map<int, int>.from(
-        json['ratingDistribution'] ?? {},
-      ),
-    );
-  }
-}
-
