@@ -35,11 +35,13 @@ class _ProductGridViewState extends State<ProductGridView> {
       });
       
       print('✅ Loaded ${_products.length} products from MongoDB');
+      if (_products.isNotEmpty) {
+        print('📦 First product: ${_products[0].name} - ₹${_products[0].price}');
+      }
     } catch (e) {
       print('❌ Error loading products: $e');
-      // Fallback to dummy data if API fails
       setState(() {
-        _products = Dummy.products;
+        _products = [];
         _isLoading = false;
       });
     }
@@ -50,6 +52,26 @@ class _ProductGridViewState extends State<ProductGridView> {
     if (_isLoading) {
       return const Expanded(
         child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_products.isEmpty) {
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('No products available'),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loadProducts,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 

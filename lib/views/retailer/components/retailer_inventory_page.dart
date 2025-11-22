@@ -161,8 +161,12 @@ class _RetailerInventoryPageState extends State<RetailerInventoryPage> {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, AppRoutes.newItems);
+                    onPressed: () async {
+                      final result = await Navigator.pushNamed(context, AppRoutes.addProduct);
+                      if (result == true) {
+                        // Reload products after adding
+                        _loadProducts();
+                      }
                     },
                     icon: const Icon(Icons.add),
                     label: const Text('Add Product'),
@@ -214,8 +218,12 @@ class _RetailerInventoryPageState extends State<RetailerInventoryPage> {
             const Text('Add products to start selling'),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pushNamed(context, AppRoutes.newItems);
+              onPressed: () async {
+                final result = await Navigator.pushNamed(context, AppRoutes.addProduct);
+                if (result == true) {
+                  // Reload products after adding
+                  _loadProducts();
+                }
               },
               icon: const Icon(Icons.add),
               label: const Text('Add Product'),

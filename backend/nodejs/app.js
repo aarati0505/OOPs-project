@@ -13,7 +13,7 @@ const corsOptions = {
     : '*', // TODO: Restrict to specific origins in production
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-email'], // Added x-user-email for dev mode
 };
 
 app.use(cors(corsOptions));

@@ -170,7 +170,7 @@ class _WholesalerDashboardNewState extends State<WholesalerDashboardNew> {
         ),
         KPITile(
           title: 'Total Revenue',
-          value: '\$${(stats.totalRevenue ?? 0).toStringAsFixed(0)}',
+          value: '₹${(stats.totalRevenue ?? 0).toStringAsFixed(0)}',
           icon: Icons.attach_money,
           color: Colors.green,
           subtitle: '${stats.completedOrders ?? 0} orders',
@@ -266,7 +266,7 @@ class _WholesalerDashboardNewState extends State<WholesalerDashboardNew> {
             _InsightRow(
               icon: Icons.inventory_2,
               label: 'Total Inventory Value',
-              value: '\$${(stats.totalInventoryValue ?? 0).toStringAsFixed(2)}',
+              value: '₹${(stats.totalInventoryValue ?? 0).toStringAsFixed(2)}',
             ),
             const Divider(height: 24),
             _InsightRow(
@@ -279,8 +279,8 @@ class _WholesalerDashboardNewState extends State<WholesalerDashboardNew> {
               icon: Icons.trending_up,
               label: 'Average Order Value',
               value: stats.totalOrders != null && stats.totalOrders! > 0
-                  ? '\$${((stats.totalRevenue ?? 0) / stats.totalOrders!).toStringAsFixed(2)}'
-                  : '\$0.00',
+                  ? '₹${((stats.totalRevenue ?? 0) / stats.totalOrders!).toStringAsFixed(2)}'
+                  : '₹0.00',
             ),
           ],
         ),
@@ -314,7 +314,7 @@ class _WholesaleOrderCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '\$${order.totalAmount.toStringAsFixed(2)}',
+              '₹${order.totalAmount.toStringAsFixed(2)}',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,

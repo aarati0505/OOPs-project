@@ -23,8 +23,7 @@ class WholesalerInventoryPage extends StatelessWidget {
                   ),
                   ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Navigate to add product page
-                      Navigator.pushNamed(context, AppRoutes.newItems);
+                      Navigator.pushNamed(context, AppRoutes.addProduct);
                     },
                     icon: const Icon(Icons.add),
                     label: const Text('Add Product'),

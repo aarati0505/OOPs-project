@@ -59,6 +59,7 @@ class _LoginPageFormState extends State<LoginPageForm> {
 
       // Try API login first (backend authentication)
       try {
+        print('🔐 Attempting API login...');
         final apiResponse = await AuthApiService.login(
           emailOrPhone: emailOrPhone,
           password: password,
@@ -68,6 +69,12 @@ class _LoginPageFormState extends State<LoginPageForm> {
           // Save user data from API response (includes correct role)
           user = apiResponse.data!.user;
           
+          print('✅ API login successful');
+          print('   User ID: ${user.id}');
+          print('   User name: ${user.name}');
+          print('   User role from API: ${user.role.name}');
+          print('   Business name: ${user.businessName}');
+          
           // Save to local storage for offline access
           await LocalAuthService.saveLoginState(
             userId: user.id,
@@ -75,13 +82,19 @@ class _LoginPageFormState extends State<LoginPageForm> {
             email: user.email,
             phoneNumber: user.phoneNumber,
             role: user.role, // Use the actual role from backend
+            businessName: user.businessName,
+            businessAddress: user.businessAddress,
           );
 
+          print('✅ User data saved to local storage');
+          
           // TODO: Store access token securely (use secure storage)
           // For now, we'll rely on local auth for session management
         }
       } catch (apiError) {
+        print('⚠️ API login failed: $apiError');
         // API login failed, try Firebase as fallback
+        print('🔥 Trying Firebase login as fallback...');
         final authService = AuthService();
         if (authService.isFirebaseInitialized) {
           try {
@@ -89,17 +102,23 @@ class _LoginPageFormState extends State<LoginPageForm> {
               emailOrPhone.contains('@') ? emailOrPhone : '$emailOrPhone@demo.com',
               password,
             );
+            if (user != null) {
+              print('✅ Firebase login successful');
+            }
           } catch (firebaseError) {
-            // Firebase also failed
+            print('⚠️ Firebase login also failed: $firebaseError');
           }
         }
 
         // If both API and Firebase failed, use local auth as last resort (demo mode)
         if (user == null) {
+          print('🧪 Using demo mode (last resort)');
           // This is a fallback for demo/testing - in production, this shouldn't happen
           final demoRole = _useTestMode && _selectedRole != null 
               ? _selectedRole! 
               : UserRole.customer;
+          
+          print('   Demo role: ${demoRole.name}');
           
           await LocalAuthService.saveLoginState(
             userId: 'demo_${DateTime.now().millisecondsSinceEpoch}',
@@ -109,22 +128,29 @@ class _LoginPageFormState extends State<LoginPageForm> {
             role: demoRole, // Use selected role in test mode
           );
           user = await authService.getCurrentUser();
+          print('✅ Demo user created');
         }
       }
       
       // Override role if test mode is enabled
       if (_useTestMode && _selectedRole != null && user != null) {
+        print('🧪 TEST MODE: Overriding role to ${_selectedRole!.name}');
         await LocalAuthService.saveLoginState(
           userId: user.id,
           name: user.name,
           email: user.email,
           phoneNumber: user.phoneNumber,
           role: _selectedRole!, // Override with selected role
+          businessName: user.businessName,
+          businessAddress: user.businessAddress,
         );
+        print('✅ Role overridden in local storage');
       }
 
       if (mounted) {
         if (user != null) {
+          print('🚀 Navigating to entry point...');
+          print('   Expected role: ${_useTestMode && _selectedRole != null ? _selectedRole!.name : user.role.name}');
           // Navigate to entry point which will route based on user role
           Navigator.pushReplacementNamed(context, AppRoutes.entryPoint);
         } else {

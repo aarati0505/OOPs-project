@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 
 import 'core/routes/app_routes.dart';
 import 'core/routes/on_generate_route.dart';
 import 'core/themes/app_themes.dart';
+import 'core/providers/cart_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +19,12 @@ void main() async {
     debugPrint('App will continue without Firebase features');
   }
   
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => CartProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -30,6 +37,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.defaultTheme,
       onGenerateRoute: RouteGenerator.onGenerate,
       initialRoute: AppRoutes.onboarding,
+      debugShowCheckedModeBanner: false,
     );
   }
 }

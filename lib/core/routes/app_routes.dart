@@ -78,6 +78,7 @@ class AppRoutes {
   static const retailerDashboard = '/retailerDashboard';
   static const retailerInventory = '/retailerInventory';
   static const retailerOrders = '/retailerOrders';
+  static const addProduct = '/addProduct';
 
   /* <---- Wholesaler Dashboard -----> */
   static const wholesalerDashboard = '/wholesalerDashboard';

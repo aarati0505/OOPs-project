@@ -97,6 +97,8 @@ class SignUpButton extends StatelessWidget {
           print('📝 User ID: ${response.data!.user.id}');
 
           // Save to local storage
+          print('💾 Saving to local storage...');
+          print('Role from API: ${response.data!.user.role.name}');
           await LocalAuthService.saveLoginState(
             userId: response.data!.user.id,
             name: response.data!.user.name,
@@ -106,6 +108,7 @@ class SignUpButton extends StatelessWidget {
             businessName: response.data!.user.businessName,
             businessAddress: response.data!.user.businessAddress,
           );
+          print('✅ Saved to local storage with role: ${response.data!.user.role.name}');
 
           if (context.mounted) {
             // Show success message

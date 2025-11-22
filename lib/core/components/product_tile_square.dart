@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/constants.dart';
 import '../models/dummy_product_model.dart';
 import '../routes/app_routes.dart';
+import '../providers/cart_provider.dart';
 import 'network_image.dart';
 
 class ProductTileSquare extends StatelessWidget {
@@ -34,15 +36,56 @@ class ProductTileSquare extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(AppDefaults.padding / 2),
-                  child: AspectRatio(
-                    aspectRatio: 1 / 1,
-                    child: NetworkImageWithLoader(
-                      data.cover,
-                      fit: BoxFit.contain,
+                Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(AppDefaults.padding / 2),
+                      child: AspectRatio(
+                        aspectRatio: 1 / 1,
+                        child: NetworkImageWithLoader(
+                          data.cover,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Material(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            Provider.of<CartProvider>(context, listen: false)
+                                .addItem(data);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${data.name} added to cart'),
+                                duration: const Duration(seconds: 2),
+                                action: SnackBarAction(
+                                  label: 'VIEW',
+                                  textColor: Colors.white,
+                                  onPressed: () {
+                                    Navigator.pushNamed(
+                                        context, AppRoutes.cartPage);
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.add_shopping_cart,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -63,7 +106,7 @@ class ProductTileSquare extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '\$${data.price.toInt()}',
+                      '₹${data.price.toInt()}',
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
@@ -73,7 +116,7 @@ class ProductTileSquare extends StatelessWidget {
                       width: 4,
                     ),
                     Text(
-                      '\$${data.mainPrice}',
+                      '₹${data.mainPrice.toInt()}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             decoration: TextDecoration.lineThrough,
                           ),

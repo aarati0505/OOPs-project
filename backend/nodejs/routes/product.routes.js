@@ -24,5 +24,14 @@ router.get('/new', authenticateToken, productController.getNewProducts);
 // GET /products/region
 router.get('/region', authenticateToken, productController.getRegionSpecificProducts);
 
+// POST /products - Create new product (retailers/wholesalers only)
+router.post('/', authenticateToken, productController.createProduct);
+
+// PUT /products/:productId - Update product
+router.put('/:productId', authenticateToken, productController.updateProduct);
+
+// DELETE /products/:productId - Delete product
+router.delete('/:productId', authenticateToken, productController.deleteProduct);
+
 module.exports = router;
 

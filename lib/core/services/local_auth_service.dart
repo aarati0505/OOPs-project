@@ -28,6 +28,13 @@ class LocalAuthService {
     String? businessName,
     String? businessAddress,
   }) async {
+    print('🔐 LocalAuthService.saveLoginState called');
+    print('   User ID: $userId');
+    print('   Name: $name');
+    print('   Email: $email');
+    print('   Role: ${role.name}');
+    print('   Business Name: $businessName');
+    
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_isLoggedInKey, true);
     await prefs.setString(_userIdKey, userId);
@@ -43,14 +50,20 @@ class LocalAuthService {
     if (businessAddress != null) {
       await prefs.setString(_businessAddressKey, businessAddress);
     }
+    
+    print('✅ LocalAuthService.saveLoginState completed');
   }
 
   // Get local user
   static Future<UserModel?> getLocalUser() async {
+    print('🔍 LocalAuthService.getLocalUser called');
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
     
+    print('   Is logged in: $isLoggedIn');
+    
     if (!isLoggedIn) {
+      print('   ❌ User not logged in');
       return null;
     }
 
@@ -60,7 +73,13 @@ class LocalAuthService {
     final phoneNumber = prefs.getString(_userPhoneKey);
     final roleString = prefs.getString(_userRoleKey);
 
+    print('   User ID: $userId');
+    print('   Name: $name');
+    print('   Email: $email');
+    print('   Role string: $roleString');
+
     if (userId == null || name == null || email == null || phoneNumber == null || roleString == null) {
+      print('   ❌ Missing required fields');
       return null;
     }
 
@@ -69,9 +88,14 @@ class LocalAuthService {
       orElse: () => UserRole.customer,
     );
 
+    print('   ✅ Parsed role: ${role.name}');
+
     // Get business information if available
     final businessName = prefs.getString(_businessNameKey);
     final businessAddress = prefs.getString(_businessAddressKey);
+
+    print('   Business Name: $businessName');
+    print('   Business Address: $businessAddress');
 
     return UserModel(
       id: userId,

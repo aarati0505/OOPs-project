@@ -285,9 +285,9 @@ class _PriceRangeState extends State<_PriceRange> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('\$0'),
-                Text('\$50'),
-                Text('\$100'),
+                Text('₹0'),
+                Text('₹50'),
+                Text('₹100'),
               ],
             ),
           )

@@ -35,7 +35,41 @@ async function authenticateToken(req, res, next) {
       return next();
     }
 
-    // Verify token
+    // DEVELOPMENT MODE: Allow user identification by email in custom header
+    // This is a temporary workaround until proper JWT token storage is implemented
+    if (process.env.NODE_ENV === 'development' && req.headers['x-user-email']) {
+      const userEmail = req.headers['x-user-email'];
+      console.log(`🔧 DEV MODE: Authenticating user by email: ${userEmail}`);
+      
+      const user = await User.findOne({ email: userEmail })
+        .select('_id name email phone role isEmailVerified isPhoneVerified businessName businessAddress location createdAt lastLoginAt')
+        .lean();
+      
+      if (user) {
+        req.user = {
+          _id: user._id,
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          isEmailVerified: user.isEmailVerified,
+          isPhoneVerified: user.isPhoneVerified,
+          businessName: user.businessName,
+          businessAddress: user.businessAddress,
+          location: user.location,
+        };
+        req.token = token;
+        console.log(`✅ DEV MODE: User authenticated: ${user.name} (${user.role})`);
+        return next();
+      } else {
+        console.log(`❌ DEV MODE: User not found with email: ${userEmail}`);
+        console.log(`💡 Available users: retailer@test.com, wholesaler@test.com`);
+        return next(new UnauthorizedError(`User not found with email: ${userEmail}. Please login with a valid account.`));
+      }
+    }
+
+    // Normal JWT token verification
     const decoded = await verifyToken(token);
     
     if (!decoded || !decoded.userId) {

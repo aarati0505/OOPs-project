@@ -1,6 +1,7 @@
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_icons.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_defaults.dart';
@@ -8,6 +9,7 @@ import '../../core/enums/user_role.dart';
 import '../../core/models/user_model.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/providers/cart_provider.dart';
 import '../cart/cart_page.dart';
 import '../home/home_page.dart';
 import '../menu/menu_page.dart';
@@ -41,8 +43,14 @@ class _EntryPointUIState extends State<EntryPointUI> {
     
     print('=== DEBUG ENTRYPOINT ===');
     print('User loaded: ${user != null}');
-    print('User role: ${user?.role.name}');
-    print('User name: ${user?.name}');
+    if (user != null) {
+      print('User ID: ${user.id}');
+      print('User name: ${user.name}');
+      print('User email: ${user.email}');
+      print('User role: ${user.role.name}');
+      print('Business name: ${user.businessName}');
+      print('Routing to: ${user.role == UserRole.customer ? "Customer Dashboard" : user.role == UserRole.retailer ? "Retailer Dashboard" : "Wholesaler Dashboard"}');
+    }
     print('=== END DEBUG ===');
     
     if (mounted) {
@@ -130,12 +138,44 @@ class _CustomerEntryPointUIState extends State<CustomerEntryPointUI> {
         duration: AppDefaults.duration,
         child: pages[currentIndex],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          onBottomNavigationTap(2);
-        },
-        backgroundColor: AppColors.primary,
-        child: SvgPicture.asset(AppIcons.cart),
+      floatingActionButton: Consumer<CartProvider>(
+        builder: (context, cart, child) => Stack(
+          clipBehavior: Clip.none,
+          children: [
+            FloatingActionButton(
+              onPressed: () {
+                onBottomNavigationTap(2);
+              },
+              backgroundColor: AppColors.primary,
+              child: SvgPicture.asset(AppIcons.cart),
+            ),
+            if (cart.itemCount > 0)
+              Positioned(
+                right: -4,
+                top: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    '${cart.itemCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: AppBottomNavigationBar(

@@ -130,7 +130,7 @@ const products = [
   { name: 'Basmati Rice', description: 'Premium basmati rice', price: 150, unit: 'kg', category: 'Pantry', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400' },
   { name: 'Wheat Flour (Atta)', description: 'Whole wheat flour', price: 45, unit: 'kg', category: 'Pantry', image: 'https://images.unsplash.com/photo-1628672795205-4d0e6bfeb7f6?w=400' },
   { name: 'Mustard Oil', description: 'Pure mustard oil', price: 180, unit: 'liter', category: 'Pantry', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=400' },
-  { name: 'Sugar', description: 'White granulated sugar', price: 50, unit: 'kg', category: 'Pantry', image: 'https://images.unsplash.com/photo-1587735243615-c03f25aaff15?w=400' },
+  { name: 'Sugar', description: 'White granulated sugar', price: 50, unit: 'kg', category: 'Pantry', image: 'https://images.unsplash.com/photo-1582169296194-e4d644c48063?w=400' },
   
   // Personal Care
   { name: 'Shampoo', description: 'Hair shampoo', price: 250, unit: 'bottle', category: 'Personal Care', image: 'https://images.unsplash.com/photo-1631730486572-226d1f595b68?w=400' },

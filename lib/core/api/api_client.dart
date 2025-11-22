@@ -10,6 +10,7 @@ class ApiClient {
   static Future<Map<String, String>> _getHeaders({
     String? token,
     bool includeContentType = true,
+    String? userEmail,
   }) async {
     final headers = <String, String>{};
 
@@ -19,6 +20,13 @@ class ApiClient {
 
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
+    }
+
+    // DEVELOPMENT MODE: Add user email header for authentication
+    // This is a temporary workaround until proper JWT token storage is implemented
+    if (userEmail != null) {
+      headers['x-user-email'] = userEmail;
+      print('🔧 DEV MODE: Adding user email header: $userEmail');
     }
 
     return headers;
@@ -57,6 +65,7 @@ class ApiClient {
     String endpoint, {
     String? token,
     Map<String, dynamic>? body,
+    String? userEmail,
   }) async {
     try {
       final uri = Uri.parse('$_baseUrl$endpoint');
@@ -64,7 +73,7 @@ class ApiClient {
       final response = await http
           .post(
             uri,
-            headers: await _getHeaders(token: token),
+            headers: await _getHeaders(token: token, userEmail: userEmail),
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(_timeout);

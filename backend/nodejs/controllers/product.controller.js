@@ -438,3 +438,242 @@ exports.getRegionSpecificProducts = async (req, res) => {
     res.status(500).json(errorResponse(createApiError('product', error.message), 'Failed to get region-specific products'));
   }
 };
+
+
+/**
+ * POST /products
+ * Create new product (retailers/wholesalers only)
+ */
+exports.createProduct = async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user is retailer or wholesaler
+    if (user.role !== 'retailer' && user.role !== 'wholesaler') {
+      return res.status(403).json(
+        errorResponse(
+          [createApiError('auth', 'Only retailers and wholesalers can create products')],
+          'Forbidden'
+        )
+      );
+    }
+
+    const { name, description, price, stock, categoryId, images, weight, region, isLocal } = req.body;
+
+    // Validation
+    if (!name || !price || stock === undefined || !categoryId) {
+      return res.status(400).json(
+        errorResponse(
+          [createApiError('product', 'Name, price, stock, and category are required')],
+          'Validation error'
+        )
+      );
+    }
+
+    // Verify category exists
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json(
+        errorResponse(
+          [createApiError('category', 'Category not found')],
+          'Category not found'
+        )
+      );
+    }
+
+    // Create product
+    const productData = {
+      name,
+      description,
+      price: parseFloat(price),
+      stock: parseInt(stock),
+      categoryId,
+      images: images || [],
+      weight,
+      region: region || user.location?.region,
+      isLocal: isLocal !== undefined ? isLocal : false,
+      isActive: true,
+    };
+
+    // Set retailer or wholesaler ID
+    if (user.role === 'retailer') {
+      productData.retailerId = user.id;
+      productData.sourceType = 'retailer';
+    } else if (user.role === 'wholesaler') {
+      productData.wholesalerId = user.id;
+      productData.sourceType = 'wholesaler';
+    }
+
+    const product = await Product.create(productData);
+
+    // Populate category for response
+    await product.populate('categoryId', 'name slug');
+
+    const productResponse = {
+      id: product._id.toString(),
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      category: product.categoryId?.name || '',
+      categoryId: product.categoryId?._id.toString(),
+      imageUrl: product.images?.[0] || null,
+      images: product.images || [],
+      inStock: product.stock > 0,
+      stock: product.stock,
+      weight: product.weight,
+      region: product.region,
+      isLocal: product.isLocal,
+      retailerId: product.retailerId?.toString(),
+      wholesalerId: product.wholesalerId?.toString(),
+      sourceType: product.sourceType,
+      rating: 0,
+      reviewCount: 0,
+      createdAt: product.createdAt.toISOString(),
+    };
+
+    console.log(`✅ Product created: ${product.name} by ${user.role} ${user.name}`);
+
+    res.status(201).json(successResponse(productResponse, 'Product created successfully'));
+  } catch (error) {
+    console.error('Create product error:', error);
+    res.status(500).json(errorResponse(createApiError('product', error.message), 'Failed to create product'));
+  }
+};
+
+/**
+ * PUT /products/:productId
+ * Update product (owner only)
+ */
+exports.updateProduct = async (req, res) => {
+  try {
+    const user = req.user;
+    const { productId } = req.params;
+    const { name, description, price, stock, categoryId, images, weight, region, isLocal, isActive } = req.body;
+
+    // Find product
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json(
+        errorResponse(
+          [createApiError('product', 'Product not found')],
+          'Product not found'
+        )
+      );
+    }
+
+    // Check ownership
+    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.id) ||
+                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.id);
+    
+    if (!isOwner) {
+      return res.status(403).json(
+        errorResponse(
+          [createApiError('auth', 'You can only update your own products')],
+          'Forbidden'
+        )
+      );
+    }
+
+    // Update fields
+    if (name !== undefined) product.name = name;
+    if (description !== undefined) product.description = description;
+    if (price !== undefined) product.price = parseFloat(price);
+    if (stock !== undefined) product.stock = parseInt(stock);
+    if (categoryId !== undefined) {
+      // Verify category exists
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        return res.status(404).json(
+          errorResponse(
+            [createApiError('category', 'Category not found')],
+            'Category not found'
+          )
+        );
+      }
+      product.categoryId = categoryId;
+    }
+    if (images !== undefined) product.images = images;
+    if (weight !== undefined) product.weight = weight;
+    if (region !== undefined) product.region = region;
+    if (isLocal !== undefined) product.isLocal = isLocal;
+    if (isActive !== undefined) product.isActive = isActive;
+
+    await product.save();
+    await product.populate('categoryId', 'name slug');
+
+    const productResponse = {
+      id: product._id.toString(),
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      category: product.categoryId?.name || '',
+      categoryId: product.categoryId?._id.toString(),
+      imageUrl: product.images?.[0] || null,
+      images: product.images || [],
+      inStock: product.stock > 0,
+      stock: product.stock,
+      weight: product.weight,
+      region: product.region,
+      isLocal: product.isLocal,
+      retailerId: product.retailerId?.toString(),
+      wholesalerId: product.wholesalerId?.toString(),
+      sourceType: product.sourceType,
+      rating: product.rating || 0,
+      reviewCount: product.reviewCount || 0,
+      createdAt: product.createdAt.toISOString(),
+    };
+
+    console.log(`✅ Product updated: ${product.name}`);
+
+    res.json(successResponse(productResponse, 'Product updated successfully'));
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json(errorResponse(createApiError('product', error.message), 'Failed to update product'));
+  }
+};
+
+/**
+ * DELETE /products/:productId
+ * Delete product (owner only)
+ */
+exports.deleteProduct = async (req, res) => {
+  try {
+    const user = req.user;
+    const { productId } = req.params;
+
+    // Find product
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json(
+        errorResponse(
+          [createApiError('product', 'Product not found')],
+          'Product not found'
+        )
+      );
+    }
+
+    // Check ownership
+    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.id) ||
+                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.id);
+    
+    if (!isOwner) {
+      return res.status(403).json(
+        errorResponse(
+          [createApiError('auth', 'You can only delete your own products')],
+          'Forbidden'
+        )
+      );
+    }
+
+    // Soft delete (set isActive to false)
+    product.isActive = false;
+    await product.save();
+
+    console.log(`✅ Product deleted: ${product.name}`);
+
+    res.json(successResponse(null, 'Product deleted successfully'));
+  } catch (error) {
+    console.error('Delete product error:', error);
+    res.status(500).json(errorResponse(createApiError('product', error.message), 'Failed to delete product'));
+  }
+};

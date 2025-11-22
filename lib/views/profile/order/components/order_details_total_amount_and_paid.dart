@@ -22,7 +22,7 @@ class TotalAmountAndPaidData extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '\$120',
+                '₹120',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold, color: Colors.black),
               ),

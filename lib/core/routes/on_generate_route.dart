@@ -43,6 +43,7 @@ import '../../views/profile/settings/change_phone_number_page.dart';
 import '../../views/profile/settings/language_settings_page.dart';
 import '../../views/profile/settings/notifications_settings_page.dart';
 import '../../views/profile/settings/settings_page.dart';
+import '../../views/retailer/add_product_page.dart';
 import '../../views/retailer/retailer_dashboard_page.dart';
 import '../../views/review/review_page.dart';
 import '../../views/review/submit_review_page.dart';
@@ -122,7 +123,10 @@ class RouteGenerator {
         return CupertinoPageRoute(builder: (_) => const BundleCreatePage());
 
       case AppRoutes.orderSuccessfull:
-        return CupertinoPageRoute(builder: (_) => const OrderSuccessfullPage());
+        return CupertinoPageRoute(
+          builder: (_) => const OrderSuccessfullPage(),
+          settings: settings, // Pass the settings with arguments
+        );
 
       case AppRoutes.orderFailed:
         return CupertinoPageRoute(builder: (_) => const OrderFailedPage());
@@ -204,6 +208,9 @@ class RouteGenerator {
 
       case AppRoutes.wholesalerDashboard:
         return CupertinoPageRoute(builder: (_) => const WholesalerDashboardPage());
+
+      case AppRoutes.addProduct:
+        return CupertinoPageRoute(builder: (_) => const AddProductPage());
 
       default:
         return errorRoute();

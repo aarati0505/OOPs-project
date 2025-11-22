@@ -68,7 +68,7 @@ class BundleTileSquare extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    '\$${data.price.toInt()}',
+                    '₹${data.price.toInt()}',
                     style: Theme.of(context)
                         .textTheme
                         .titleLarge
@@ -76,7 +76,7 @@ class BundleTileSquare extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '\$${data.mainPrice}',
+                    '₹${data.mainPrice.toInt()}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           decoration: TextDecoration.lineThrough,
                         ),

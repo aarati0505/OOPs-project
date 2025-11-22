@@ -48,7 +48,7 @@ class RetailerOrdersPage extends StatelessWidget {
                                 child: ListTile(
                                   leading: const Icon(Icons.shopping_bag),
                                   title: const Text('Order #12345'),
-                                  subtitle: const Text('Customer: John Doe\nAmount: \$150.00'),
+                                  subtitle: const Text('Customer: John Doe\nAmount: ₹150.00'),
                                   trailing: const Chip(
                                     label: Text('Pending'),
                                     backgroundColor: Colors.orange,
@@ -68,7 +68,7 @@ class RetailerOrdersPage extends StatelessWidget {
                                 child: ListTile(
                                   leading: const Icon(Icons.store),
                                   title: const Text('Order from Wholesaler'),
-                                  subtitle: const Text('Wholesaler: ABC Corp\nAmount: \$500.00'),
+                                  subtitle: const Text('Wholesaler: ABC Corp\nAmount: ₹500.00'),
                                   trailing: const Chip(
                                     label: Text('Processing'),
                                     backgroundColor: Colors.blue,

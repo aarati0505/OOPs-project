@@ -173,7 +173,7 @@ class _RetailerDashboardNewState extends State<RetailerDashboardNew> {
         ),
         KPITile(
           title: 'Total Revenue',
-          value: '\$${(stats.totalRevenue ?? 0).toStringAsFixed(0)}',
+          value: '₹${(stats.totalRevenue ?? 0).toStringAsFixed(0)}',
           icon: Icons.attach_money,
           color: Colors.green,
           subtitle: '${stats.completedOrders ?? 0} orders',
@@ -456,7 +456,7 @@ class _OrderSummaryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '\$${order.totalAmount.toStringAsFixed(2)}',
+              '₹${order.totalAmount.toStringAsFixed(2)}',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,

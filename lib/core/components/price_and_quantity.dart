@@ -50,7 +50,7 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
       children: [
         /* <---- Price -----> */
         Text(
-          '\$30',
+          '₹30',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
@@ -59,7 +59,7 @@ class _PriceAndQuantityRowState extends State<PriceAndQuantityRow> {
         ),
         const SizedBox(width: AppDefaults.padding),
         Text(
-          '\$20',
+          '₹20',
           style: Theme.of(context)
               .textTheme
               .headlineSmall

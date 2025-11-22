@@ -180,18 +180,29 @@ class AuthService {
 
   // Get current user
   Future<UserModel?> getCurrentUser() async {
-    // Try Firebase first if initialized
+    // Always check local storage first for complete user data (including role)
+    try {
+      final localUser = await LocalAuthService.getLocalUser();
+      if (localUser != null) {
+        return localUser;
+      }
+    } catch (e) {
+      // Local auth error, try Firebase
+    }
+    
+    // Fallback to Firebase if local storage doesn't have user data
     if (isFirebaseInitialized && _firebaseAuth != null) {
       try {
         final firebaseUser = _firebaseAuth!.currentUser;
         if (firebaseUser != null) {
-          // TODO: Fetch complete user data from database
+          // Return Firebase user with default customer role
+          // This should only happen if local storage was cleared
           return UserModel(
             id: firebaseUser.uid,
             name: firebaseUser.displayName ?? '',
             email: firebaseUser.email ?? '',
             phoneNumber: firebaseUser.phoneNumber ?? '',
-            role: UserRole.customer, // Should be fetched from database
+            role: UserRole.customer, // Default role
             profileImageUrl: firebaseUser.photoURL,
             isEmailVerified: firebaseUser.emailVerified,
             createdAt: DateTime.now(),
@@ -199,17 +210,11 @@ class AuthService {
           );
         }
       } catch (e) {
-        // Firebase error, fall through to local auth
+        // Firebase error
       }
     }
     
-    // Fallback to local authentication if Firebase is not available
-    try {
-      final localUser = await LocalAuthService.getLocalUser();
-      return localUser;
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 }
 

@@ -6,6 +6,7 @@ const authRoutes = require('./auth.routes');
 const userRoutes = require('./user.routes');
 const productRoutes = require('./product.routes');
 const orderRoutes = require('./order.routes');
+const simpleOrderRoutes = require('./simple-order.routes');
 const cartRoutes = require('./cart.routes');
 const inventoryRoutes = require('./inventory.routes');
 const categoryRoutes = require('./category.routes');
@@ -19,7 +20,7 @@ const wholesalerRoutes = require('./wholesaler.routes');
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/products', productRoutes);
-router.use('/orders', orderRoutes);
+router.use('/orders', simpleOrderRoutes); // Simple order route (no auth)
 router.use('/cart', cartRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/categories', categoryRoutes);

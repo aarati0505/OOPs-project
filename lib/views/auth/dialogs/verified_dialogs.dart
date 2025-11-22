@@ -13,6 +13,10 @@ class VerifiedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('=== DEBUG VERIFIED DIALOG ===');
+    print('User role in dialog: ${userRole?.name}');
+    print('=== END DEBUG ===');
+    
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: AppDefaults.borderRadius),
       child: Padding(
@@ -42,8 +46,12 @@ class VerifiedDialog extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: AppDefaults.padding),
-            const Text(
-              'Hurrah!!  You have successfully\nverified the account.',
+            Text(
+              userRole == UserRole.retailer
+                  ? 'Welcome Retailer! Your account has been verified.'
+                  : userRole == UserRole.wholesaler
+                      ? 'Welcome Wholesaler! Your account has been verified.'
+                      : 'Hurrah!! You have successfully\nverified the account.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppDefaults.padding),
@@ -59,7 +67,11 @@ class VerifiedDialog extends StatelessWidget {
                     (route) => false,
                   );
                 },
-                child: const Text('Browse Home'),
+                child: Text(
+                  userRole == UserRole.retailer || userRole == UserRole.wholesaler
+                      ? 'Go to Dashboard'
+                      : 'Browse Home',
+                ),
               ),
             ),
           ],

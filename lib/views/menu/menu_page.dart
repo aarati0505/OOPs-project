@@ -159,7 +159,7 @@ class _CateogoriesGridState extends State<CateogoriesGrid> {
         itemBuilder: (context, index) {
           final category = _categories[index];
           return CategoryTile(
-            imageLink: _getCategoryImage(category.name),
+            imageLink: category.imageUrl ?? 'https://i.imgur.com/m65fusg.png',
             label: category.name,
             backgroundColor: _getCategoryColor(index),
             onTap: () {
@@ -192,20 +192,5 @@ class _CateogoriesGridState extends State<CateogoriesGrid> {
     return colors[index % colors.length];
   }
 
-  String _getCategoryImage(String categoryName) {
-    // Map category names to original image URLs
-    final categoryImages = {
-      'Fruits & Vegetables': 'https://i.imgur.com/tGChxbZ.png',
-      'Dairy & Eggs': 'https://i.imgur.com/yOFxoIP.png',
-      'Bakery': 'https://i.imgur.com/GPsRaFC.png',
-      'Meat & Seafood': 'https://i.imgur.com/mGRqfnc.png',
-      'Beverages': 'https://i.imgur.com/fwyz4oC.png',
-      'Snacks': 'https://i.imgur.com/DNr8a6R.png',
-      'Pantry': 'https://i.imgur.com/O2ZX5nR.png',
-      'Personal Care': 'https://i.imgur.com/wJBopjL.png',
-    };
 
-    // Return mapped image or default
-    return categoryImages[categoryName] ?? 'https://i.imgur.com/m65fusg.png';
-  }
 }

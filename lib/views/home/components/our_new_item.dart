@@ -46,16 +46,16 @@ class _OurNewItemState extends State<OurNewItem> {
       
       if (_products.isEmpty) {
         print('⚠️ No products returned from API');
+      } else {
+        print('📦 First product: ${_products[0].name} - ₹${_products[0].price}');
       }
     } catch (e, stackTrace) {
       print('❌ Error loading products: $e');
       print('Stack trace: $stackTrace');
-      // Fallback to dummy data if API fails
       setState(() {
-        _products = Dummy.products.take(10).toList();
+        _products = [];
         _isLoading = false;
       });
-      print('⚠️ Using dummy data as fallback');
     }
   }
 
@@ -72,16 +72,32 @@ class _OurNewItemState extends State<OurNewItem> {
                 padding: EdgeInsets.all(AppDefaults.padding),
                 child: Center(child: CircularProgressIndicator()),
               )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.only(left: AppDefaults.padding),
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: List.generate(
-                    _products.length,
-                    (index) => ProductTileSquare(data: _products[index]),
+            : _products.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(AppDefaults.padding * 2),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        const Text('No products available'),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _loadProducts,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.only(left: AppDefaults.padding),
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: List.generate(
+                        _products.length,
+                        (index) => ProductTileSquare(data: _products[index]),
+                      ),
+                    ),
                   ),
-                ),
-              ),
       ],
     );
   }

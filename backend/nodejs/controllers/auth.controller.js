@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const OtpToken = require('../models/OtpToken');
-const { successResponse } = require('../utils/response.util');
+const { successResponse, errorResponse, createApiError } = require('../utils/response.util');
 const { validateSignupPayload, validateLoginPayload } = require('../utils/validation.util');
 const { ValidationError, NotFoundError, UnauthorizedError } = require('../utils/error.util');
 const {
