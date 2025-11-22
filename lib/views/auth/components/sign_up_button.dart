@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 
+import '../../../core/api/services/auth_api_service.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/enums/user_role.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/local_auth_service.dart';
 
 class SignUpButton extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -27,7 +29,19 @@ class SignUpButton extends StatelessWidget {
     required this.businessAddressController,
   });
 
-  void _onSignUpPressed(BuildContext context) {
+  String _formatPhoneNumber(String phone) {
+    // Remove any spaces, dashes, or parentheses
+    String cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    
+    // If it doesn't start with +, add +91 (India country code)
+    if (!cleaned.startsWith('+')) {
+      cleaned = '+91$cleaned';
+    }
+    
+    return cleaned;
+  }
+
+  Future<void> _onSignUpPressed(BuildContext context) async {
     // Validate form
     if (formKey.currentState?.validate() ?? false) {
       if (selectedRole == null) {
@@ -37,30 +51,110 @@ class SignUpButton extends StatelessWidget {
         return;
       }
 
+      // Format phone number with country code
+      final formattedPhone = _formatPhoneNumber(phoneController.text);
+
       print('=== DEBUG SIGNUP ===');
       print('Selected role: ${selectedRole?.name}');
       print('Business name: ${businessNameController.text}');
+      print('Original phone: ${phoneController.text}');
+      print('Formatted phone: $formattedPhone');
       print('=== END DEBUG ===');
 
-      // TODO: Store registration data temporarily (could use SharedPreferences or Provider)
-      // For now, navigate to OTP verification with phone number
-      Navigator.pushNamed(
-        context,
-        AppRoutes.numberVerification,
-        arguments: {
-          'phoneNumber': phoneController.text,
-          'name': nameController.text,
-          'email': emailController.text,
-          'password': passwordController.text,
-          'role': selectedRole?.name,
-          'businessName': businessNameController.text.isNotEmpty 
-              ? businessNameController.text 
-              : null,
-          'businessAddress': businessAddressController.text.isNotEmpty 
-              ? businessAddressController.text 
-              : null,
-        },
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
       );
+
+      try {
+        // Save user to MongoDB immediately
+        print('💾 Saving user to MongoDB...');
+        final response = await AuthApiService.signup(
+          name: nameController.text,
+          email: emailController.text,
+          phoneNumber: formattedPhone, // Use formatted phone
+          password: passwordController.text,
+          role: selectedRole!,
+          businessName: businessNameController.text.isNotEmpty
+              ? businessNameController.text
+              : null,
+          businessAddress: businessAddressController.text.isNotEmpty
+              ? businessAddressController.text
+              : null,
+        );
+
+        // Close loading dialog
+        if (context.mounted) {
+          Navigator.pop(context);
+        }
+
+        if (response.success && response.data != null) {
+          print('✅ User saved to MongoDB successfully');
+          print('📝 User ID: ${response.data!.user.id}');
+
+          // Save to local storage
+          await LocalAuthService.saveLoginState(
+            userId: response.data!.user.id,
+            name: response.data!.user.name,
+            email: response.data!.user.email,
+            phoneNumber: response.data!.user.phoneNumber,
+            role: response.data!.user.role,
+            businessName: response.data!.user.businessName,
+            businessAddress: response.data!.user.businessAddress,
+          );
+
+          if (context.mounted) {
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Account created! Please verify your phone number.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+
+            // Navigate to OTP verification for phone verification
+            Navigator.pushNamed(
+              context,
+              AppRoutes.numberVerification,
+              arguments: {
+                'phoneNumber': formattedPhone, // Use formatted phone with +91
+                'name': nameController.text,
+                'email': emailController.text,
+                'password': passwordController.text,
+                'role': selectedRole?.name,
+                'businessName': businessNameController.text.isNotEmpty 
+                    ? businessNameController.text 
+                    : null,
+                'businessAddress': businessAddressController.text.isNotEmpty 
+                    ? businessAddressController.text 
+                    : null,
+                'alreadySaved': true, // User already saved to MongoDB
+              },
+            );
+          }
+        } else {
+          throw Exception(response.message ?? 'Signup failed');
+        }
+      } catch (e) {
+        print('❌ Error saving user: $e');
+        
+        // Close loading dialog if still open
+        if (context.mounted) {
+          Navigator.pop(context);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Signup failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 

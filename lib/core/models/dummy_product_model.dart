@@ -96,34 +96,44 @@ class ProductModel {
 
   // Create from JSON
   factory ProductModel.fromJson(Map<String, dynamic> json) {
+    // Handle both backend API format and local format
+    final imageUrl = json['imageUrl'] ?? json['cover'] ?? '';
+    final List<String> imagesList = json['images'] != null 
+        ? List<String>.from(json['images'] as List)
+        : (imageUrl.isNotEmpty ? <String>[imageUrl] : <String>[]);
+    
     return ProductModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      weight: json['weight'] ?? '',
-      cover: json['cover'] ?? '',
-      images: List<String>.from(json['images'] ?? []),
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Unknown Product',
+      weight: json['weight']?.toString() ?? json['unit']?.toString() ?? 'N/A',
+      cover: imageUrl,
+      images: imagesList,
       price: (json['price'] ?? 0).toDouble(),
-      mainPrice: (json['mainPrice'] ?? 0).toDouble(),
-      category: json['category'] ?? '',
-      description: json['description'],
-      stockQuantity: json['stockQuantity'] ?? 0,
-      isAvailable: json['isAvailable'] ?? true,
+      mainPrice: (json['mainPrice'] ?? json['price'] ?? 0).toDouble(),
+      category: json['category']?.toString() ?? 'Uncategorized',
+      description: json['description']?.toString(),
+      stockQuantity: json['stockQuantity'] ?? json['stock'] ?? 0,
+      isAvailable: json['isAvailable'] ?? json['inStock'] ?? true,
       availabilityDate: json['availabilityDate'] != null
-          ? DateTime.parse(json['availabilityDate'])
+          ? DateTime.tryParse(json['availabilityDate'])
           : null,
       isRegionSpecific: json['isRegionSpecific'] ?? false,
-      region: json['region'],
-      retailerId: json['retailerId'] ?? '',
-      retailerName: json['retailerName'],
-      wholesalerId: json['wholesalerId'],
-      wholesalerName: json['wholesalerName'],
+      region: json['region']?.toString(),
+      retailerId: json['retailerId']?.toString() ?? '',
+      retailerName: json['retailerName']?.toString(),
+      wholesalerId: json['wholesalerId']?.toString(),
+      wholesalerName: json['wholesalerName']?.toString(),
       isViaWholesaler: json['isViaWholesaler'] ?? false,
-      sourceType: json['sourceType'],
-      sourceProductId: json['sourceProductId'],
+      sourceType: json['sourceType']?.toString(),
+      sourceProductId: json['sourceProductId']?.toString(),
       shopLocation: json['shopLocation'],
       distanceFromUser: json['distanceFromUser']?.toDouble(),
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      createdAt: json['createdAt'] != null 
+          ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt']) ?? DateTime.now()
+          : DateTime.now(),
     );
   }
   

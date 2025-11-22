@@ -3,13 +3,13 @@ import '../api_client.dart';
 import '../models/api_response.dart';
 
 class CategoryApiService {
-  // Get all categories
+  // Get all categories (no authentication required)
   static Future<ApiResponse<List<Category>>> getCategories({
     String? token,
   }) async {
     final response = await ApiClient.get(
       AppConstants.categoriesEndpoint,
-      token: token,
+      token: null, // Allow unauthenticated access
     );
 
     final json = ApiClient.handleResponse(response);
@@ -21,14 +21,14 @@ class CategoryApiService {
     );
   }
 
-  // Get category by ID
+  // Get category by ID (no authentication required)
   static Future<ApiResponse<Category>> getCategoryById({
     required String categoryId,
     String? token,
   }) async {
     final response = await ApiClient.get(
       '${AppConstants.categoriesEndpoint}/$categoryId',
-      token: token,
+      token: null, // Allow unauthenticated access
     );
 
     final json = ApiClient.handleResponse(response);

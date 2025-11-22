@@ -1,6 +1,11 @@
 class AppConstants {
   // API Configuration
-  static const String apiBaseUrl = 'http://localhost:3000/v1'; // Local backend server
+  // For Android Emulator: use 10.0.2.2 (emulator's special alias for host machine)
+  // For iOS Simulator: use localhost
+  // For Physical Device: use your computer's IP address
+  // static const String apiBaseUrl = 'http://10.0.2.2:3000/v1'; // Android Emulator
+  // static const String apiBaseUrl = 'http://localhost:3000/v1'; // iOS Simulator
+  static const String apiBaseUrl = 'http://172.20.41.115:3000/v1'; // Physical Device
   static const String apiTimeout = '30s';
 
   // API Endpoints

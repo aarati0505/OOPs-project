@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../core/api/services/auth_api_service.dart';
 import '../../core/components/network_image.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_defaults.dart';
@@ -24,7 +25,7 @@ class _NumberVerificationPageState extends State<NumberVerificationPage> {
   UserRole _testRole = UserRole.customer; // For testing when no signup data
   String? _verificationId; // Firebase verification ID
   bool _isLoading = false;
-  bool _useFirebaseOTP = true; // Toggle between Firebase OTP and mock OTP
+  bool _useFirebaseOTP = false; // Toggle between Firebase OTP and mock OTP (set to false for testing)
   
   @override
   void didChangeDependencies() {
@@ -294,16 +295,8 @@ class _NumberVerificationPageState extends State<NumberVerificationPage> {
       role = _testRole;
     }
     
-    // Save user to local storage
-    await LocalAuthService.saveLoginState(
-      userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
-      name: _signupData?['name'] as String? ?? 'User',
-      email: _signupData?['email'] as String? ?? 'user@example.com',
-      phoneNumber: _signupData?['phoneNumber'] as String? ?? '1234567890',
-      role: role,
-      businessName: _signupData?['businessName'] as String?,
-      businessAddress: _signupData?['businessAddress'] as String?,
-    );
+    // Save user to MongoDB via API
+    await _saveUserToDatabase(null, role);
     
     setState(() {
       _isLoading = false;
@@ -340,16 +333,8 @@ class _NumberVerificationPageState extends State<NumberVerificationPage> {
         orElse: () => UserRole.customer,
       );
       
-      // Save user to local storage
-      await LocalAuthService.saveLoginState(
-        userId: userCredential.user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
-        name: _signupData?['name'] as String? ?? 'User',
-        email: _signupData?['email'] as String? ?? 'user@example.com',
-        phoneNumber: _signupData?['phoneNumber'] as String? ?? '',
-        role: role,
-        businessName: _signupData?['businessName'] as String?,
-        businessAddress: _signupData?['businessAddress'] as String?,
-      );
+      // Save user to MongoDB via API
+      await _saveUserToDatabase(userCredential.user?.uid, role);
       
       setState(() {
         _isLoading = false;
@@ -379,6 +364,78 @@ class _NumberVerificationPageState extends State<NumberVerificationPage> {
           SnackBar(content: Text('Sign in failed: $e')),
         );
       }
+    }
+  }
+  
+  // Save user to MongoDB database
+  Future<void> _saveUserToDatabase(String? firebaseUid, UserRole role) async {
+    try {
+      print('💾 Saving user to MongoDB...');
+      print('📋 Signup data: ${_signupData?.keys.join(", ")}');
+      
+      // Validate required fields
+      final name = _signupData?['name'] as String?;
+      final email = _signupData?['email'] as String?;
+      final phoneNumber = _signupData?['phoneNumber'] as String?;
+      final password = _signupData?['password'] as String?;
+      
+      if (name == null || email == null || phoneNumber == null || password == null) {
+        print('⚠️ Missing required signup data');
+        throw Exception('Missing required signup data');
+      }
+      
+      // Call signup API to save user to MongoDB
+      final response = await AuthApiService.signup(
+        name: name,
+        email: email,
+        phoneNumber: phoneNumber,
+        password: password,
+        role: role,
+        businessName: _signupData?['businessName'] as String?,
+        businessAddress: _signupData?['businessAddress'] as String?,
+      );
+      
+      if (response.success && response.data != null) {
+        print('✅ User saved to MongoDB successfully');
+        print('📝 User ID: ${response.data!.user.id}');
+        
+        // Save to local storage with MongoDB user ID
+        await LocalAuthService.saveLoginState(
+          userId: response.data!.user.id,
+          name: response.data!.user.name,
+          email: response.data!.user.email,
+          phoneNumber: response.data!.user.phoneNumber,
+          role: response.data!.user.role,
+          businessName: response.data!.user.businessName,
+          businessAddress: response.data!.user.businessAddress,
+        );
+      } else {
+        print('⚠️ API signup failed: ${response.message}');
+        // Fallback to local storage
+        await LocalAuthService.saveLoginState(
+          userId: firebaseUid ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
+          name: name,
+          email: email,
+          phoneNumber: phoneNumber,
+          role: role,
+          businessName: _signupData?['businessName'] as String?,
+          businessAddress: _signupData?['businessAddress'] as String?,
+        );
+      }
+    } catch (e) {
+      print('❌ Error saving to MongoDB: $e');
+      print('Stack trace: ${StackTrace.current}');
+      
+      // Fallback to local storage
+      await LocalAuthService.saveLoginState(
+        userId: firebaseUid ?? 'user_${DateTime.now().millisecondsSinceEpoch}',
+        name: _signupData?['name'] as String? ?? 'User',
+        email: _signupData?['email'] as String? ?? 'user@example.com',
+        phoneNumber: _signupData?['phoneNumber'] as String? ?? '',
+        role: role,
+        businessName: _signupData?['businessName'] as String?,
+        businessAddress: _signupData?['businessAddress'] as String?,
+      );
     }
   }
 

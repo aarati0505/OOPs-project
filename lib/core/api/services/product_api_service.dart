@@ -4,7 +4,7 @@ import '../api_client.dart';
 import '../models/api_response.dart';
 
 class ProductApiService {
-  // Get all products with pagination and filters
+  // Get all products with pagination and filters (no authentication required)
   static Future<PaginatedResponse<ProductModel>> getProducts({
     String? token,
     int page = 1,
@@ -39,7 +39,7 @@ class ProductApiService {
 
     final response = await ApiClient.get(
       AppConstants.productsEndpoint,
-      token: token,
+      token: null, // Allow unauthenticated access for browsing
       queryParameters: queryParams,
     );
 
@@ -105,7 +105,7 @@ class ProductApiService {
     );
   }
 
-  // Get products by category
+  // Get products by category (no authentication required)
   static Future<PaginatedResponse<ProductModel>> getProductsByCategory({
     required String categoryId,
     String? token,
@@ -114,7 +114,7 @@ class ProductApiService {
   }) async {
     final response = await ApiClient.get(
       '${AppConstants.productsByCategoryEndpoint}/$categoryId',
-      token: token,
+      token: null, // Allow unauthenticated access
       queryParameters: {
         'page': page,
         'pageSize': pageSize,

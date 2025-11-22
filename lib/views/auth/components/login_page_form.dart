@@ -28,6 +28,8 @@ class _LoginPageFormState extends State<LoginPageForm> {
 
   bool isPasswordShown = false;
   bool _isLoading = false;
+  UserRole? _selectedRole; // For testing/demo mode
+  bool _useTestMode = false; // Toggle for test mode
 
   @override
   void dispose() {
@@ -95,15 +97,30 @@ class _LoginPageFormState extends State<LoginPageForm> {
         // If both API and Firebase failed, use local auth as last resort (demo mode)
         if (user == null) {
           // This is a fallback for demo/testing - in production, this shouldn't happen
+          final demoRole = _useTestMode && _selectedRole != null 
+              ? _selectedRole! 
+              : UserRole.customer;
+          
           await LocalAuthService.saveLoginState(
             userId: 'demo_${DateTime.now().millisecondsSinceEpoch}',
             name: 'Demo User',
             email: emailOrPhone.contains('@') ? emailOrPhone : '$emailOrPhone@demo.com',
             phoneNumber: emailOrPhone.contains('@') ? '' : emailOrPhone,
-            role: UserRole.customer, // Default to customer in demo mode
+            role: demoRole, // Use selected role in test mode
           );
           user = await authService.getCurrentUser();
         }
+      }
+      
+      // Override role if test mode is enabled
+      if (_useTestMode && _selectedRole != null && user != null) {
+        await LocalAuthService.saveLoginState(
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          role: _selectedRole!, // Override with selected role
+        );
       }
 
       if (mounted) {
@@ -144,13 +161,64 @@ class _LoginPageFormState extends State<LoginPageForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Phone Field
-              const Text("Phone Number"),
+              // Test Mode Toggle
+              Row(
+                children: [
+                  Checkbox(
+                    value: _useTestMode,
+                    onChanged: (value) {
+                      setState(() {
+                        _useTestMode = value ?? false;
+                        if (!_useTestMode) {
+                          _selectedRole = null;
+                        }
+                      });
+                    },
+                  ),
+                  const Text('Test Mode (Override Role)'),
+                ],
+              ),
+              
+              // Role Dropdown (only visible in test mode)
+              if (_useTestMode) ...[
+                const SizedBox(height: 8),
+                const Text("Select Role (Test Mode)"),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<UserRole>(
+                  value: _selectedRole,
+                  decoration: const InputDecoration(
+                    hintText: 'Choose a role',
+                  ),
+                  items: UserRole.values.map((role) {
+                    return DropdownMenuItem(
+                      value: role,
+                      child: Text(role.name.toUpperCase()),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedRole = value;
+                    });
+                  },
+                  validator: _useTestMode
+                      ? (value) => value == null ? 'Please select a role' : null
+                      : null,
+                ),
+                const SizedBox(height: AppDefaults.padding),
+              ],
+              
+              // Email or Phone Field
+              const Text("Email or Phone Number"),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _phoneController,
-                keyboardType: TextInputType.number,
-                validator: Validators.requiredWithFieldName('Phone').call,
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Email or phone is required';
+                  }
+                  return null;
+                },
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: AppDefaults.padding),
