@@ -221,5 +221,98 @@ class ProductApiService {
           .toList()),
     );
   }
-}
 
+  // Create new product (retailers/wholesalers only)
+  static Future<ApiResponse<ProductModel>> createProduct({
+    required String token,
+    required String name,
+    required String description,
+    required double price,
+    required int stock,
+    required String categoryId,
+    List<String>? images,
+    String? weight,
+    String? region,
+    bool? isLocal,
+    String? userEmail, // For development mode authentication
+  }) async {
+    final body = {
+      'name': name,
+      'description': description,
+      'price': price,
+      'stock': stock,
+      'categoryId': categoryId,
+      if (images != null) 'images': images,
+      if (weight != null) 'weight': weight,
+      if (region != null) 'region': region,
+      if (isLocal != null) 'isLocal': isLocal,
+    };
+
+    final response = await ApiClient.post(
+      AppConstants.productsEndpoint,
+      token: token,
+      body: body,
+      userEmail: userEmail, // Pass user email for dev mode auth
+    );
+
+    final json = ApiClient.handleResponse(response);
+    return ApiResponse.fromJson(
+      json,
+      (data) => ProductModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  // Update product (owner only)
+  static Future<ApiResponse<ProductModel>> updateProduct({
+    required String token,
+    required String productId,
+    String? name,
+    String? description,
+    double? price,
+    int? stock,
+    String? categoryId,
+    List<String>? images,
+    String? weight,
+    String? region,
+    bool? isLocal,
+    bool? isActive,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (description != null) body['description'] = description;
+    if (price != null) body['price'] = price;
+    if (stock != null) body['stock'] = stock;
+    if (categoryId != null) body['categoryId'] = categoryId;
+    if (images != null) body['images'] = images;
+    if (weight != null) body['weight'] = weight;
+    if (region != null) body['region'] = region;
+    if (isLocal != null) body['isLocal'] = isLocal;
+    if (isActive != null) body['isActive'] = isActive;
+
+    final response = await ApiClient.put(
+      '${AppConstants.productsEndpoint}/$productId',
+      token: token,
+      body: body,
+    );
+
+    final json = ApiClient.handleResponse(response);
+    return ApiResponse.fromJson(
+      json,
+      (data) => ProductModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  // Delete product (owner only)
+  static Future<ApiResponse<void>> deleteProduct({
+    required String token,
+    required String productId,
+  }) async {
+    final response = await ApiClient.delete(
+      '${AppConstants.productsEndpoint}/$productId',
+      token: token,
+    );
+
+    final json = ApiClient.handleResponse(response);
+    return ApiResponse.fromJson(json, (_) => null);
+  }
+}
