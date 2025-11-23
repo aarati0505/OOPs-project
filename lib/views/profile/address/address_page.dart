@@ -112,27 +112,32 @@ class AddressTile extends StatelessWidget {
         children: [
           AppRadio(isActive: isActive),
           const SizedBox(width: AppDefaults.padding),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.black,
-                    ),
-              ),
-              const SizedBox(height: 4),
-              Text(address),
-              const SizedBox(height: 4),
-              Text(
-                number,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.black,
-                    ),
-              )
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.black,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  address,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  number,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.black,
+                      ),
+                )
+              ],
+            ),
           ),
-          const Spacer(),
           Column(
             children: [
               IconButton(

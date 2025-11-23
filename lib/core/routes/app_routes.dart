@@ -88,4 +88,5 @@ class AppRoutes {
   /* <---- Location & Calendar -----> */
   static const locationPicker = '/locationPicker';
   static const offlineOrderCalendar = '/offlineOrderCalendar';
+  static const nearbyShops = '/nearbyShops';
 }

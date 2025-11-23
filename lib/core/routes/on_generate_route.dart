@@ -49,6 +49,7 @@ import '../../views/review/review_page.dart';
 import '../../views/review/submit_review_page.dart';
 import '../../views/save/save_page.dart';
 import '../../views/wholesaler/wholesaler_dashboard_page.dart';
+import '../../views/map/nearby_shops_page.dart';
 import 'app_routes.dart';
 import 'unknown_page.dart';
 
@@ -214,6 +215,9 @@ class RouteGenerator {
 
       case AppRoutes.addProduct:
         return CupertinoPageRoute(builder: (_) => const AddProductPage());
+
+      case AppRoutes.nearbyShops:
+        return CupertinoPageRoute(builder: (_) => const NearbyShopsPage());
 
       default:
         return errorRoute();
