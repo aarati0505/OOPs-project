@@ -34,9 +34,25 @@ router.get('/:orderId', authenticateToken, ordersController.getOrderById);
  * PATCH /v1/orders/:orderId
  * Matches: OrderApiService.updateOrderStatus()
  * Headers: Authorization: Bearer <token>
- * Request: { status, trackingNumber? }
+ * Request: { status, trackingNumber?, notes? }
  */
 router.patch('/:orderId', authenticateToken, ordersController.updateOrderStatus);
+
+/**
+ * PATCH /v1/orders/:orderId/status
+ * Update order status (alternative endpoint)
+ * Headers: Authorization: Bearer <token>
+ * Request: { status, trackingNumber?, notes? }
+ */
+router.patch('/:orderId/status', authenticateToken, ordersController.updateOrderStatus);
+
+/**
+ * GET /v1/orders/user/:userId
+ * Get all orders for a specific user
+ * Headers: Authorization: Bearer <token>
+ * Query: page, pageSize, status
+ */
+router.get('/user/:userId', authenticateToken, ordersController.getUserOrders);
 
 /**
  * GET /v1/orders/:orderId/tracking

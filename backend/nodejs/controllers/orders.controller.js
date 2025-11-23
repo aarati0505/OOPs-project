@@ -181,8 +181,17 @@ exports.getOrderById = async (req, res, next) => {
 exports.updateOrderStatus = async (req, res, next) => {
   try {
     const { orderId } = req.params;
-    const { status, trackingNumber } = req.body;
+    const { status, trackingNumber, notes } = req.body;
     const userId = req.user.userId;
+
+    // Validate status
+    const validStatuses = ['confirmed', 'processing', 'shipped', 'delivery', 'cancelled'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+      });
+    }
 
     const order = await Order.findOne({
       _id: orderId,
@@ -199,11 +208,24 @@ exports.updateOrderStatus = async (req, res, next) => {
       });
     }
 
+    // Log status change
+    const oldStatus = order.status;
+    if (oldStatus !== status) {
+      order.statusLogs = order.statusLogs || [];
+      order.statusLogs.push({
+        oldStatus,
+        newStatus: status,
+        changedBy: userId,
+        timestamp: new Date(),
+        notes: notes || `Status changed from ${oldStatus} to ${status}`,
+      });
+    }
+
     order.status = status;
     if (trackingNumber) order.trackingNumber = trackingNumber;
     order.updatedAt = new Date();
 
-    if (status === 'delivered') {
+    if (status === 'delivery') {
       order.deliveredAt = new Date();
     }
 
@@ -306,6 +328,55 @@ exports.getOrderHistory = async (req, res, next) => {
   }
 };
 
+// Get User Orders (by userId param)
+exports.getUserOrders = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { page = 1, pageSize = 20, status } = req.query;
+    const requestingUserId = req.user.userId;
+
+    // Authorization: Only allow users to view their own orders or admin/retailer
+    if (userId !== requestingUserId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized to view these orders',
+      });
+    }
+
+    const query = { userId };
+    if (status) query.status = status;
+
+    const skip = (parseInt(page) - 1) * parseInt(pageSize);
+    const limit = parseInt(pageSize);
+
+    const [orders, totalItems] = await Promise.all([
+      Order.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('retailerId', 'name businessName'),
+      Order.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    res.json({
+      success: true,
+      data: {
+        data: orders.map((o) => formatOrder(o)),
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems,
+        pageSize: limit,
+        hasNext: parseInt(page) < totalPages,
+        hasPrevious: parseInt(page) > 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Helper function to format order response
 function formatOrder(order) {
   return {
@@ -323,6 +394,7 @@ function formatOrder(order) {
     paymentStatus: order.paymentStatus,
     transactionId: order.transactionId,
     status: order.status,
+    statusLogs: order.statusLogs,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     deliveredAt: order.deliveredAt?.toISOString(),

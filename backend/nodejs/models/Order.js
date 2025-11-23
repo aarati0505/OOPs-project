@@ -19,6 +19,14 @@ const trackingInfoSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 }, { _id: true });
 
+const statusLogSchema = new mongoose.Schema({
+  oldStatus: { type: String },
+  newStatus: { type: String, required: true },
+  changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  timestamp: { type: Date, default: Date.now },
+  notes: { type: String },
+}, { _id: true });
+
 const orderSchema = new mongoose.Schema({
   userId: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -37,8 +45,8 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true, min: 0 },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'],
-    default: 'pending',
+    enum: ['confirmed', 'processing', 'shipped', 'delivery', 'cancelled'],
+    default: 'confirmed',
   },
   paymentMethod: {
     type: String,
@@ -59,6 +67,7 @@ const orderSchema = new mongoose.Schema({
   deliveryInstructions: { type: String },
   trackingNumber: { type: String },
   trackingInfo: [trackingInfoSchema],
+  statusLogs: [statusLogSchema],
   couponCode: { type: String },
   discount: { type: Number, default: 0 },
   finalAmount: { type: Number, required: true, min: 0 },
