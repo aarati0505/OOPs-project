@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:http/http.dart' as http;
 import '../constants/payment_constants.dart';
+import '../constants/app_constants.dart';
 
 /// Payment Service for handling Razorpay payments
 class PaymentService {
@@ -100,29 +103,32 @@ class PaymentService {
   }
 
   /// Create order on backend (call this before opening checkout)
-  /// This should call your backend API to create a Razorpay order
-  static Future<String?> createOrder({
+  /// This calls your backend API to create a Razorpay order
+  static Future<String?> createOrderOnBackend({
     required double amount,
-    required String currency,
   }) async {
     try {
-      // TODO: Call your backend API to create Razorpay order
-      // Example:
-      // final response = await http.post(
-      //   Uri.parse('http://localhost:3000/v1/payment/create-order'),
-      //   body: json.encode({
-      //     'amount': amount,
-      //     'currency': currency,
-      //   }),
-      // );
-      // 
-      // if (response.statusCode == 200) {
-      //   final data = json.decode(response.body);
-      //   return data['orderId'];
-      // }
-      
-      print('⚠️ Backend order creation not implemented yet');
-      return 'order_${DateTime.now().millisecondsSinceEpoch}';
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/payment/create-order'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'amount': amount,
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+        final orderId = data['data']?['order']?['id'];
+        
+        if (orderId != null) {
+          print('✅ Razorpay order created: $orderId');
+          return orderId;
+        }
+      }
+
+      print('❌ Failed to create order: ${response.statusCode}');
+      print('Response: ${response.body}');
+      return null;
     } catch (e) {
       print('❌ Error creating order: $e');
       return null;

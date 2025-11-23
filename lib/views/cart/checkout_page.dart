@@ -138,19 +138,51 @@ class _PayNowButtonState extends State<PayNowButton> {
     _placeOrderDirectly();
   }
 
-  void _openRazorpayCheckout() {
+  Future<void> _openRazorpayCheckout() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     
     setState(() => _isPlacingOrder = true);
 
-    // Open Razorpay payment
-    _paymentService.openCheckout(
-      amount: cart.finalAmount,
-      orderId: 'order_${DateTime.now().millisecondsSinceEpoch}',
-      customerName: 'Customer Name', // TODO: Get from user profile
-      customerEmail: 'customer@example.com', // TODO: Get from user profile
-      customerPhone: '9876543210', // TODO: Get from user profile
-    );
+    try {
+      // Step 1: Create Razorpay order on backend
+      print('📝 Creating Razorpay order on backend...');
+      final orderId = await PaymentService.createOrderOnBackend(
+        amount: cart.finalAmount,
+      );
+
+      if (orderId == null) {
+        throw Exception('Failed to create Razorpay order on backend');
+      }
+
+      print('✅ Backend order created: $orderId');
+
+      // Step 2: Get user details (you should get this from auth/profile provider)
+      // For now using placeholder - TODO: Replace with actual user data
+      final customerName = 'Customer Name'; // TODO: Get from UserProvider
+      final customerEmail = 'customer@example.com'; // TODO: Get from UserProvider
+      final customerPhone = '9876543210'; // TODO: Get from UserProvider
+
+      // Step 3: Open Razorpay checkout with real order ID
+      _paymentService.openCheckout(
+        amount: cart.finalAmount,
+        orderId: orderId,
+        customerName: customerName,
+        customerEmail: customerEmail,
+        customerPhone: customerPhone,
+      );
+    } catch (e) {
+      print('❌ Error opening Razorpay: $e');
+      setState(() => _isPlacingOrder = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize payment: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _placeOrderAfterPayment(String? paymentId, String? razorpayOrderId) async {
