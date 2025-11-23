@@ -30,9 +30,9 @@ class PaymentCardTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: AppDefaults.borderRadius,
           child: Container(
-            height: 66,
+            height: 90,
             width: 135,
-            padding: const EdgeInsets.symmetric(),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               borderRadius: AppDefaults.borderRadius,
               border: Border.all(
@@ -43,14 +43,24 @@ class PaymentCardTile extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SvgPicture.asset(icon),
+                SizedBox(
+                  height: 40,
+                  width: 100,
+                  child: SvgPicture.asset(
+                    icon,
+                    fit: BoxFit.contain,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   label,
                   style: Theme.of(context)
                       .textTheme
-                      .bodyLarge
+                      .bodySmall
                       ?.copyWith(color: Colors.black),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

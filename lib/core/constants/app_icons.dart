@@ -29,6 +29,7 @@ class AppIcons {
   static const removeQuantity = 'assets/icons/remove_quantity.svg';
   static const shoppingCart = 'assets/icons/shopping_cart.svg';
   static const delete = 'assets/icons/delete.svg';
+  static const razorpay = 'assets/icons/razorpay.svg';
   static const paypal = 'assets/icons/paypal.svg';
   static const cashOnDelivery = 'assets/icons/cash_on_delivery.svg';
   static const masterCard = 'assets/icons/master_card.svg';

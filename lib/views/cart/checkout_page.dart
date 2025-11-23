@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'dart:convert';
 
 import '../../core/components/app_back_button.dart';
 import '../../core/constants/app_defaults.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/payment_constants.dart';
 import '../../core/routes/app_routes.dart';
 import '../../core/providers/cart_provider.dart';
+import '../../core/services/payment_service.dart';
 import 'components/checkout_address_selector.dart';
 import 'components/checkout_card_details.dart';
 import 'components/checkout_payment_systems.dart';
 
-class CheckoutPage extends StatelessWidget {
+class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
+
+  @override
+  State<CheckoutPage> createState() => _CheckoutPageState();
+}
+
+class _CheckoutPageState extends State<CheckoutPage> {
+  String _selectedPaymentMethod = 'cod'; // Default to Cash on Delivery
 
   @override
   Widget build(BuildContext context) {
@@ -26,9 +36,15 @@ class CheckoutPage extends StatelessWidget {
         child: Column(
           children: [
             const AddressSelector(),
-            const PaymentSystem(),
+            PaymentSystem(
+              onPaymentMethodChanged: (method) {
+                setState(() {
+                  _selectedPaymentMethod = method;
+                });
+              },
+            ),
             const CardDetails(),
-            PayNowButton(),
+            PayNowButton(selectedPaymentMethod: _selectedPaymentMethod),
             const SizedBox(height: 16),
           ],
         ),
@@ -38,7 +54,9 @@ class CheckoutPage extends StatelessWidget {
 }
 
 class PayNowButton extends StatefulWidget {
-  const PayNowButton({super.key});
+  const PayNowButton({super.key, required this.selectedPaymentMethod});
+
+  final String selectedPaymentMethod;
 
   @override
   State<PayNowButton> createState() => _PayNowButtonState();
@@ -46,8 +64,177 @@ class PayNowButton extends StatefulWidget {
 
 class _PayNowButtonState extends State<PayNowButton> {
   bool _isPlacingOrder = false;
+  final PaymentService _paymentService = PaymentService();
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize Razorpay
+    _paymentService.initialize(
+      onSuccess: (PaymentSuccessResponse response) {
+        print('✅ Payment Success!');
+        print('   Payment ID: ${response.paymentId}');
+        print('   Order ID: ${response.orderId}');
+        
+        // Place order after successful payment
+        _placeOrderAfterPayment(response.paymentId, response.orderId);
+      },
+      onFailure: (PaymentFailureResponse response) {
+        print('❌ Payment Failed!');
+        print('   Code: ${response.code}');
+        print('   Message: ${response.message}');
+        
+        setState(() => _isPlacingOrder = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed: ${response.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+      onDismiss: () {
+        print('⚠️ Payment dismissed by user');
+        setState(() => _isPlacingOrder = false);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _paymentService.dispose();
+    super.dispose();
+  }
 
   Future<void> _placeOrder() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+
+    if (cart.itemCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your cart is empty')),
+      );
+      return;
+    }
+
+    // Check if Razorpay is selected and configured
+    if (widget.selectedPaymentMethod == 'razorpay') {
+      if (!PaymentConstants.isConfigured) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Razorpay not configured. Please add API keys.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      // Open Razorpay checkout
+      _openRazorpayCheckout();
+      return;
+    }
+
+    // For other payment methods, proceed with normal order placement
+    _placeOrderDirectly();
+  }
+
+  void _openRazorpayCheckout() {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    
+    setState(() => _isPlacingOrder = true);
+
+    // Open Razorpay payment
+    _paymentService.openCheckout(
+      amount: cart.finalAmount,
+      orderId: 'order_${DateTime.now().millisecondsSinceEpoch}',
+      customerName: 'Customer Name', // TODO: Get from user profile
+      customerEmail: 'customer@example.com', // TODO: Get from user profile
+      customerPhone: '9876543210', // TODO: Get from user profile
+    );
+  }
+
+  Future<void> _placeOrderAfterPayment(String? paymentId, String? razorpayOrderId) async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+
+    try {
+      // Prepare order data with payment info
+      final orderData = {
+        'userId': '507f1f77bcf86cd799439011',
+        'items': cart.cartItems.map((item) => {
+          'productId': item.product.id,
+          'productName': item.product.name,
+          'productImage': item.product.cover,
+          'quantity': item.quantity,
+          'unitPrice': item.product.price,
+          'totalPrice': item.totalPrice,
+          'weight': item.product.weight,
+        }).toList(),
+        'totalAmount': cart.totalAmount,
+        'discount': cart.discountAmount,
+        'finalAmount': cart.finalAmount,
+        'couponCode': cart.appliedCouponCode,
+        'paymentMethod': 'razorpay',
+        'paymentStatus': 'paid',
+        'paymentId': paymentId,
+        'razorpayOrderId': razorpayOrderId,
+        'status': 'confirmed',
+        'deliveryAddress': {
+          'address': 'Customer Address',
+        },
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+
+      print('📦 Creating order after payment...');
+
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/orders/create'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(orderData),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = json.decode(response.body);
+        final orderId = responseData['data']?['orderId'] ?? razorpayOrderId ?? 'N/A';
+        
+        print('✅ Order created successfully!');
+        
+        final finalAmount = cart.finalAmount;
+        final discountAmount = cart.discountAmount;
+        final couponCode = cart.appliedCouponCode;
+        
+        cart.clear();
+
+        if (mounted) {
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.orderSuccessfull,
+            arguments: {
+              'orderId': orderId,
+              'totalAmount': finalAmount,
+              'discount': discountAmount,
+              'couponCode': couponCode,
+              'paymentMethod': 'Razorpay',
+            },
+          );
+        }
+      } else {
+        throw Exception('Failed to create order');
+      }
+    } catch (e) {
+      print('❌ Error creating order: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment successful but order creation failed: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isPlacingOrder = false);
+    }
+  }
+
+  Future<void> _placeOrderDirectly() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
 
     if (cart.itemCount == 0) {
@@ -249,6 +436,9 @@ class _PayNowButtonState extends State<PayNowButton> {
                 // Place Order Button
                 ElevatedButton(
                   onPressed: _isPlacingOrder || cart.itemCount == 0 ? null : _placeOrder,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                   child: _isPlacingOrder
                       ? const SizedBox(
                           height: 20,
@@ -258,7 +448,22 @@ class _PayNowButtonState extends State<PayNowButton> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text('Place Order'),
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (widget.selectedPaymentMethod == 'razorpay') ...[
+                              const Icon(Icons.payment, size: 20),
+                              const SizedBox(width: 8),
+                              const Text('Pay with Razorpay'),
+                            ] else if (widget.selectedPaymentMethod == 'cod') ...[
+                              const Icon(Icons.local_shipping, size: 20),
+                              const SizedBox(width: 8),
+                              const Text('Place Order (COD)'),
+                            ] else ...[
+                              const Text('Place Order'),
+                            ],
+                          ],
+                        ),
                 ),
               ],
             ),
