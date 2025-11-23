@@ -16,6 +16,22 @@ const { authenticateToken } = require('../middleware/auth.middleware');
 router.post('/', authenticateToken, ordersController.createOrder);
 
 /**
+ * GET /v1/orders/history - MUST be before /:orderId
+ * Matches: OrderApiService.getOrderHistory()
+ * Headers: Authorization: Bearer <token>
+ * Query: page, pageSize, startDate, endDate
+ */
+router.get('/history', authenticateToken, ordersController.getOrderHistory);
+
+/**
+ * GET /v1/orders/user/:userId - MUST be before /:orderId
+ * Get all orders for a specific user
+ * Headers: Authorization: Bearer <token>
+ * Query: page, pageSize, status
+ */
+router.get('/user/:userId', authenticateToken, ordersController.getUserOrders);
+
+/**
  * GET /v1/orders
  * Matches: OrderApiService.getCustomerOrders()
  * Headers: Authorization: Bearer <token>
@@ -24,19 +40,18 @@ router.post('/', authenticateToken, ordersController.createOrder);
 router.get('/', authenticateToken, ordersController.getCustomerOrders);
 
 /**
- * GET /v1/orders/:orderId
+ * GET /v1/orders/:orderId/tracking
+ * Matches: OrderApiService.trackOrder()
+ * Headers: Authorization: Bearer <token>
+ */
+router.get('/:orderId/tracking', authenticateToken, ordersController.trackOrder);
+
+/**
+ * GET /v1/orders/:orderId - MUST be after specific routes
  * Matches: OrderApiService.getOrderById()
  * Headers: Authorization: Bearer <token>
  */
 router.get('/:orderId', authenticateToken, ordersController.getOrderById);
-
-/**
- * PATCH /v1/orders/:orderId
- * Matches: OrderApiService.updateOrderStatus()
- * Headers: Authorization: Bearer <token>
- * Request: { status, trackingNumber?, notes? }
- */
-router.patch('/:orderId', authenticateToken, ordersController.updateOrderStatus);
 
 /**
  * PATCH /v1/orders/:orderId/status
@@ -47,27 +62,12 @@ router.patch('/:orderId', authenticateToken, ordersController.updateOrderStatus)
 router.patch('/:orderId/status', authenticateToken, ordersController.updateOrderStatus);
 
 /**
- * GET /v1/orders/user/:userId
- * Get all orders for a specific user
+ * PATCH /v1/orders/:orderId
+ * Matches: OrderApiService.updateOrderStatus()
  * Headers: Authorization: Bearer <token>
- * Query: page, pageSize, status
+ * Request: { status, trackingNumber?, notes? }
  */
-router.get('/user/:userId', authenticateToken, ordersController.getUserOrders);
-
-/**
- * GET /v1/orders/:orderId/tracking
- * Matches: OrderApiService.trackOrder()
- * Headers: Authorization: Bearer <token>
- */
-router.get('/:orderId/tracking', authenticateToken, ordersController.trackOrder);
-
-/**
- * GET /v1/orders/history
- * Matches: OrderApiService.getOrderHistory()
- * Headers: Authorization: Bearer <token>
- * Query: page, pageSize, startDate, endDate
- */
-router.get('/history', authenticateToken, ordersController.getOrderHistory);
+router.patch('/:orderId', authenticateToken, ordersController.updateOrderStatus);
 
 module.exports = router;
 

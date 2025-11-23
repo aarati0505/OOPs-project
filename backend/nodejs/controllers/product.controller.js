@@ -497,10 +497,10 @@ exports.createProduct = async (req, res) => {
 
     // Set retailer or wholesaler ID
     if (user.role === 'retailer') {
-      productData.retailerId = user.id;
+      productData.retailerId = user.userId;
       productData.sourceType = 'retailer';
     } else if (user.role === 'wholesaler') {
-      productData.wholesalerId = user.id;
+      productData.wholesalerId = user.userId;
       productData.sourceType = 'wholesaler';
     }
 
@@ -562,8 +562,8 @@ exports.updateProduct = async (req, res) => {
     }
 
     // Check ownership
-    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.id) ||
-                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.id);
+    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.userId) ||
+                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.userId);
     
     if (!isOwner) {
       return res.status(403).json(
@@ -653,8 +653,8 @@ exports.deleteProduct = async (req, res) => {
     }
 
     // Check ownership
-    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.id) ||
-                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.id);
+    const isOwner = (user.role === 'retailer' && product.retailerId?.toString() === user.userId) ||
+                    (user.role === 'wholesaler' && product.wholesalerId?.toString() === user.userId);
     
     if (!isOwner) {
       return res.status(403).json(

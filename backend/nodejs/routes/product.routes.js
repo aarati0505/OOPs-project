@@ -3,26 +3,26 @@ const router = express.Router();
 const productController = require('../controllers/product.controller');
 const { authenticateToken } = require('../middleware/auth.middleware');
 
+// GET /products/search - MUST be before /:productId
+router.get('/search', authenticateToken, productController.searchProducts);
+
+// GET /products/popular - MUST be before /:productId
+router.get('/popular', authenticateToken, productController.getPopularProducts);
+
+// GET /products/new - MUST be before /:productId
+router.get('/new', authenticateToken, productController.getNewProducts);
+
+// GET /products/region - MUST be before /:productId
+router.get('/region', authenticateToken, productController.getRegionSpecificProducts);
+
+// GET /products/category/:categoryId - MUST be before /:productId
+router.get('/category/:categoryId', authenticateToken, productController.getProductsByCategory);
+
 // GET /products
 router.get('/', authenticateToken, productController.getProducts);
 
-// GET /products/:productId
+// GET /products/:productId - MUST be after specific routes
 router.get('/:productId', authenticateToken, productController.getProductById);
-
-// GET /products/search
-router.get('/search', authenticateToken, productController.searchProducts);
-
-// GET /products/category/:categoryId
-router.get('/category/:categoryId', authenticateToken, productController.getProductsByCategory);
-
-// GET /products/popular
-router.get('/popular', authenticateToken, productController.getPopularProducts);
-
-// GET /products/new
-router.get('/new', authenticateToken, productController.getNewProducts);
-
-// GET /products/region
-router.get('/region', authenticateToken, productController.getRegionSpecificProducts);
 
 // POST /products - Create new product (retailers/wholesalers only)
 router.post('/', authenticateToken, productController.createProduct);

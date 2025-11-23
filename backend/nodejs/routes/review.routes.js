@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
 const { authenticateToken } = require('../middleware/auth.middleware');
@@ -87,7 +88,7 @@ router.get('/product/:productId/stats', async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { productId, rating, comment, orderId } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId;
     
     // Validate input
     if (!productId || !rating || !comment) {
@@ -154,7 +155,7 @@ router.put('/:reviewId', authenticateToken, async (req, res) => {
   try {
     const { reviewId } = req.params;
     const { rating, comment } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.userId;
     
     const review = await Review.findById(reviewId);
     
@@ -199,7 +200,7 @@ router.put('/:reviewId', authenticateToken, async (req, res) => {
 router.delete('/:reviewId', authenticateToken, async (req, res) => {
   try {
     const { reviewId } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.userId;
     
     const review = await Review.findById(reviewId);
     

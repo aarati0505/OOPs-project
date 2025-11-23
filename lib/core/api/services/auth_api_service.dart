@@ -163,7 +163,7 @@ class LoginResponse {
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
       user: UserModel.fromJson(json['user'] as Map<String, dynamic>),
-      accessToken: json['accessToken'] ?? '',
+      accessToken: json['accessToken'] ?? json['token'] ?? '',
       refreshToken: json['refreshToken'],
     );
   }

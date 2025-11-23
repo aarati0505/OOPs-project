@@ -6,11 +6,11 @@ const { authenticateToken, requireAuth } = require('../middleware/auth.middlewar
 // GET /notifications
 router.get('/', authenticateToken, requireAuth, notificationController.getNotifications);
 
+// POST /notifications/read-all - MUST be before /read/:notificationId
+router.post('/read-all', authenticateToken, requireAuth, notificationController.markAllNotificationsRead);
+
 // POST /notifications/read/:notificationId
 router.post('/read/:notificationId', authenticateToken, requireAuth, notificationController.markNotificationRead);
-
-// POST /notifications/read-all
-router.post('/read-all', authenticateToken, requireAuth, notificationController.markAllNotificationsRead);
 
 // DELETE /notifications/:notificationId
 router.delete('/:notificationId', authenticateToken, requireAuth, notificationController.deleteNotification);

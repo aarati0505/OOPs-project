@@ -1,7 +1,7 @@
 import '../enums/dummy_order_status.dart';
 import '../enums/user_role.dart';
 
-enum PaymentMethod { online, offline, cashOnDelivery }
+enum PaymentMethod { card, cash_on_delivery, paypal, wallet }
 
 enum PaymentStatus { pending, completed, failed, refunded }
 
